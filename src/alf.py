@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Alf — iMessage AI 비서 POC. chat.db 폴링 → Claude → 답장."""
+"""Alf — iMessage AI 비서. chat.db 폴링 → Brain → Memory → 답장."""
 
-import json
 import os
-import re
 import sqlite3
 import subprocess
+import sys
 import time
 
 from dotenv import load_dotenv
+
+import brain
+import memory
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "skills", "research"))
+import save_note
 
 load_dotenv()
 
@@ -49,13 +53,11 @@ def extract_text(text, attributed_body):
         return None
     try:
         blob = bytes(attributed_body)
-        # streamtyped 포맷: "NSString" 이후 길이 바이트 + UTF-8 텍스트
         marker = b"NSString"
         idx = blob.find(marker)
         if idx == -1:
             return None
         idx += len(marker)
-        # 길이 인코딩: 짧으면 1바이트, 길면 다음 2바이트
         length_byte = blob[idx]
         if length_byte == 0x01:
             idx += 1
@@ -68,21 +70,6 @@ def extract_text(text, attributed_body):
         return blob[idx : idx + length].decode("utf-8").strip()
     except Exception:
         return "[미디어 메시지]"
-
-
-def ask_claude(message, session_id=None):
-    env = os.environ.copy()
-    env.pop("CLAUDECODE", None)  # 중첩 세션 방지
-    cmd = ["claude", "-p", "--model", "sonnet", "--output-format", "json"]
-    if session_id:
-        cmd += ["--resume", session_id]
-    cmd.append(message)
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env)
-    if result.returncode != 0:
-        print(f"[claude 에러] {result.stderr.strip()}")
-        return None, session_id
-    data = json.loads(result.stdout)
-    return data["result"], data.get("session_id", session_id)
 
 
 def escape_applescript(text):
@@ -111,11 +98,11 @@ def send_imessage(recipient, text):
 
 
 def main():
+    memory.init()
     print(f"Alf 시작 — 감시 대상: {MY_NUMBER}")
     last_rowid = get_max_rowid()
     print(f"현재 ROWID: {last_rowid}, 폴링 시작...")
-    session_id = None
-    sent_texts = set()  # 봇이 보낸 텍스트 추적 (에코 무시용)
+    sent_texts = set()
 
     while True:
         try:
@@ -130,18 +117,37 @@ def main():
                     sent_texts.discard(content)
                     print(f"[에코 무시] {content[:40]}...")
                     continue
+
                 print(f"[수신] {content}")
-                reply, session_id = ask_claude(content, session_id)
-                if reply is None:
-                    print("[스킵] Claude 응답 실패, 재시도 안 함")
+
+                # 메모리 로딩 → Claude 호출
+                memory_context = memory.load_all()
+                raw_reply = brain.ask(content, memory_context)
+
+                if raw_reply is None:
+                    print("[스킵] Claude 응답 실패")
                     last_rowid = rowid
                     continue
+
+                # 노트 파싱 → Apple Notes 저장
+                raw_reply, note_saved = save_note.parse_and_save(raw_reply)
+
+                # 기억 파싱 + 저장, 클린 응답 추출
+                reply = memory.parse_and_save(raw_reply)
+
+                # 노트 저장됐으면 안내 추가
+                if note_saved:
+                    reply += "\n메모앱에 정리해뒀어, 확인해봐."
+
+                # 대화 기록
+                memory.log_history(content, reply)
+
                 print(f"[응답] {reply[:80]}...")
                 send_imessage(MY_NUMBER, reply)
                 sent_texts.add(reply)
                 last_rowid = rowid
+
             if messages:
-                # 메시지 없는 핸들도 rowid는 업데이트
                 last_rowid = max(last_rowid, messages[-1][0])
         except KeyboardInterrupt:
             print("\nAlf 종료.")
