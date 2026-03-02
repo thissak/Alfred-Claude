@@ -11,7 +11,11 @@
 - [x] E2E 테스트 (iMessage 송수신, 기억 저장/조회, 모델 선택 검증 완료)
 - [x] 모델 전략 결정 (sonnet 통일 — haiku 속도 이점 미미, 스킬 프로토콜 정확도 우선)
 - [x] research 스킬 (조사 결과 → Apple Notes 공유 폴더에 구조화 저장)
-- [ ] 24시간 안정성 테스트 (launchd 데몬 등록, 크래시 복구)
+- [x] 웹 접근 기능 (MCP fetch + WebFetch — 링크 내용 직접 fetch)
+- [x] 데이터 피드 시스템 (data/*.json → 프롬프트 자동 주입)
+- [x] email 스킬 추가
+- [x] launchd 데몬 등록 (Swift .app + FDA + KeepAlive 크래시 복구)
+- [ ] 24시간 안정성 확인
 
 ## Phase 2: 먼저 말 거는 비서
 - [ ] 스케줄러 설계

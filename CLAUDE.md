@@ -13,6 +13,7 @@ iMessage로 대화하는 개인 AI 비서. Mac Mini 서버에서 24시간 구동
                             ├── brain.py    프롬프트 조립 + Claude 호출
                             ├── memory.py   기억 읽기/쓰기/파싱
                             ├── skills/     스킬 디렉토리 (1스킬=1디렉토리)
+                            ├── daemon_ctl.py  Swift .app 빌드 + launchd 관리
                             ├── Scheduler   launchd/cron (P2)
                             └── Executor    shell commands (P3)
 ```
@@ -22,7 +23,7 @@ iMessage로 대화하는 개인 AI 비서. Mac Mini 서버에서 24시간 구동
 ```
 메시지 수신 → memory.load_all()
   → brain.build_system_prompt(페르소나 + 스킬 + 기억)
-  → brain.ask() → claude -p --model {model} --system-prompt "..."
+  → brain.ask() → claude -p --model {model} --allowedTools "mcp__fetch" "WebFetch" --system-prompt "..."
   → save_note.parse_and_save() → [NOTE:xxx] 파싱 → Apple Notes 저장
   → memory.parse_and_save() → [MEM:xxx] 파싱 → 파일 저장
   → memory.log_history()

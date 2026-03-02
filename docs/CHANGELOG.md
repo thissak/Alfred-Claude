@@ -1,5 +1,18 @@
 # Alf — Changelog
 
+## 2026-03-03
+
+- [feat] `daemon_ctl.py` — Swift 네이티브 .app 빌드 + launchd 데몬 관리 시스템 구현
+- [fix] FDA(전체 디스크 접근) 해결 — 셸 스크립트 .app은 TCC가 무시, Swift Mach-O + ad-hoc 코드서명으로 해결
+- [fix] launchd PATH 부재 — plist `EnvironmentVariables`에 `/opt/homebrew/bin` 등 추가
+- [fix] `brain.py` claude CLI → `/opt/homebrew/bin/claude` 풀패스 (launchd 환경 대응)
+- [fix] `alf.py` traceback 로깅 추가 — 에러 원인 추적 개선
+- [feat] 웹 접근 기능 추가 — MCP fetch 서버 + WebFetch를 `--allowedTools`로 활성화
+- [feat] `daemons/` — launchd 데몬 설정 추가
+- [feat] `skills/email/` — 이메일 스킬 추가
+- [feat] `data/` — 데이터 피드 디렉토리 + brain.py 피드 로딩 연동
+- [chore] `requirements.txt` 추가
+
 ## 2026-03-02 (v3 — E2E 검증 + research 스킬)
 
 - [test] E2E 테스트 완료 — iMessage 송수신, 기억 저장/조회, 모델 선택 모두 정상
