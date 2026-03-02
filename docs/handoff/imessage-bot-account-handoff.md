@@ -1,18 +1,46 @@
 # iMessage Bot 계정 세팅 Handoff
 
-## 현재 상태
+## 완료된 작업
 - Apple ID `alfred77bot@gmail.com` 생성 완료
-- Mac Mini Messages 앱에 로그인 완료
-- **iMessage 활성화 대기 중** (2026-03-02 생성, 최대 24시간 소요)
+- iMessage 활성화 확인됨 (2026-03-02)
+- Mac Mini에 macOS 유저 `afred` 생성 완료
+- GitHub private repo 생성: https://github.com/thissak/Alfred
+- `.env` 포함하여 push 완료
 
-## 다음 작업
-1. iMessage 활성화 확인
-   - iPhone에서 `alfred77bot@gmail.com`으로 메시지 전송
-   - **파란색 버블** = 활성화 완료 → 다음 단계 진행
-   - **초록색 버블** = 아직 대기 중 → 추가 대기
-2. 활성화 확인 후 `.env`의 대상 설정을 bot 계정 기준으로 업데이트
-3. `src/alf.py`에서 bot 계정으로 수발신 테스트
+## 현재 상태
+- 메인 계정(에이아이머신)에서 개발/push 완료
+- `afred` 계정은 아직 빈 상태 — 세팅 필요
+
+## afred 계정에서 할 작업
+
+### 1. 프로젝트 clone
+```bash
+git clone https://github.com/thissak/Alfred.git
+cd Alfred
+```
+- GitHub 인증 필요 (private repo) → `gh auth login` 또는 HTTPS token 사용
+
+### 2. Messages 앱 설정
+- Messages 앱 열기 → `alfred77bot@gmail.com`으로 로그인
+- iMessage 탭에서 활성화 확인
+
+### 3. 권한 설정
+- 시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근 권한 → Terminal 추가
+- 첫 실행 시 Automation 권한 팝업 허용
+
+### 4. Python 환경
+```bash
+pip3 install python-dotenv
+```
+
+### 5. 실행 및 테스트
+```bash
+python3 src/alf.py
+# "Alf 시작 — 감시 대상: +821097458966" 출력 확인
+# iPhone에서 alfred77bot@gmail.com으로 메시지 전송 → 답장 확인
+```
 
 ## 알려진 이슈
-- 새 Apple ID는 iMessage 활성화에 최대 24시간 소요
-- 활성화 안 될 경우: Messages 로그아웃 → 재로그인, Wi-Fi 확인
+- Full Disk Access 미부여 시 `sqlite3.OperationalError: unable to open database file`
+- Automation 미허용 시 osascript 발신 실패
+- `afred` 계정에 `claude` CLI가 없을 수 있음 → Claude Max 로그인 필요
