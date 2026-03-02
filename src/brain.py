@@ -133,7 +133,7 @@ def ask(message, memory_context):
         "/opt/homebrew/bin/claude", "-p",
         "--model", model,
         "--output-format", "json",
-        "--allowedTools", "mcp__fetch", "WebFetch",
+        "--allowedTools", "mcp__fetch", "WebFetch", "Read",
         "--system-prompt", system_prompt,
         message,
     ]
