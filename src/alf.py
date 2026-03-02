@@ -6,6 +6,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import traceback
 
 from dotenv import load_dotenv
 
@@ -154,6 +155,7 @@ def main():
             break
         except Exception as e:
             print(f"[에러] {e}")
+            traceback.print_exc()
         time.sleep(POLL_INTERVAL)
 
 

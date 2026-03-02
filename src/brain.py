@@ -1,5 +1,6 @@
 """프롬프트 조립 + Claude 호출."""
 
+import glob
 import json
 import os
 import subprocess
@@ -10,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SKILLS_DIR = os.path.join(os.path.dirname(__file__), "..", "skills")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 ALF_MODEL_CHAT = os.environ.get("ALF_MODEL_CHAT", "sonnet")
 ALF_MODEL_MEMORY = os.environ.get("ALF_MODEL_MEMORY", "sonnet")
@@ -34,7 +36,12 @@ def build_system_prompt(memory_context):
     for skill_content in _load_skills():
         parts.append(skill_content)
 
-    # 3. 메모리 컨텍스트
+    # 3. 데이터 피드
+    feeds = _load_feeds()
+    if feeds:
+        parts.append(feeds)
+
+    # 4. 메모리 컨텍스트
     if memory_context:
         parts.append(f"## 현재 기억\n\n{memory_context}")
 
@@ -71,6 +78,42 @@ def _load_skills():
     return skills
 
 
+def _load_feeds():
+    """data/*.json 자동 로딩 → 프롬프트 섹션 생성."""
+    if not os.path.isdir(DATA_DIR):
+        return ""
+
+    sections = []
+    for path in sorted(glob.glob(os.path.join(DATA_DIR, "*.json"))):
+        try:
+            with open(path, encoding="utf-8") as f:
+                feed = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        source = feed.get("source", os.path.basename(path))
+        updated = feed.get("updated_at", "")
+        items = feed.get("items", [])
+        if not items:
+            continue
+
+        lines = [f"### {source} (갱신: {updated})"]
+        for item in items:
+            subj = item.get("subject", item.get("title", ""))
+            preview = item.get("preview", "")
+            sender = item.get("from", "")
+            date = item.get("date", "")
+            lines.append(f"- [{date}] {sender}: {subj}")
+            if preview:
+                lines.append(f"  > {preview[:100]}")
+
+        sections.append("\n".join(lines))
+
+    if not sections:
+        return ""
+    return "## 데이터 피드\n\n" + "\n\n".join(sections)
+
+
 def select_model(message):
     """메시지 내용에 따라 모델 선택."""
     if MEMORY_KEYWORDS.search(message):
@@ -87,9 +130,10 @@ def ask(message, memory_context):
     env.pop("CLAUDECODE", None)  # 중첩 세션 방지
 
     cmd = [
-        "claude", "-p",
+        "/opt/homebrew/bin/claude", "-p",
         "--model", model,
         "--output-format", "json",
+        "--allowedTools", "mcp__fetch", "WebFetch",
         "--system-prompt", system_prompt,
         message,
     ]
