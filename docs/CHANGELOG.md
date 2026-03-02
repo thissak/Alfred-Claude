@@ -10,6 +10,9 @@
 - [feat] 웹 접근 기능 추가 — MCP fetch 서버 + WebFetch를 `--allowedTools`로 활성화
 - [feat] `daemons/` — launchd 데몬 설정 추가
 - [feat] `skills/email/` — 이메일 스킬 추가
+- [feat] 이메일 전체 본문 확인 — 에이전트 방식 (Read 도구로 `data/emails/{uid}.txt` 직접 읽기)
+- [fix] 이메일 HTML 미리보기 → 태그 제거하여 텍스트만 표시
+- [fix] 네이버 IMAP IDLE 미지원 → 5분 폴링 방식으로 전환 (#1)
 - [feat] `data/` — 데이터 피드 디렉토리 + brain.py 피드 로딩 연동
 - [chore] `requirements.txt` 추가
 

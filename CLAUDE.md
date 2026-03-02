@@ -23,7 +23,7 @@ iMessage로 대화하는 개인 AI 비서. Mac Mini 서버에서 24시간 구동
 ```
 메시지 수신 → memory.load_all()
   → brain.build_system_prompt(페르소나 + 스킬 + 기억)
-  → brain.ask() → claude -p --model {model} --allowedTools "mcp__fetch" "WebFetch" --system-prompt "..."
+  → brain.ask() → claude -p --model {model} --allowedTools "mcp__fetch" "WebFetch" "Read" --system-prompt "..."
   → save_note.parse_and_save() → [NOTE:xxx] 파싱 → Apple Notes 저장
   → memory.parse_and_save() → [MEM:xxx] 파싱 → 파일 저장
   → memory.log_history()

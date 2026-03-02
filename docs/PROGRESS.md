@@ -13,7 +13,7 @@
 - [x] research 스킬 (조사 결과 → Apple Notes 공유 폴더에 구조화 저장)
 - [x] 웹 접근 기능 (MCP fetch + WebFetch — 링크 내용 직접 fetch)
 - [x] 데이터 피드 시스템 (data/*.json → 프롬프트 자동 주입)
-- [x] email 스킬 추가
+- [x] email 스킬 (요약 + 에이전트 Read로 전체 본문 확인)
 - [x] launchd 데몬 등록 (Swift .app + FDA + KeepAlive 크래시 복구)
 - [ ] 24시간 안정성 확인
 
