@@ -9,29 +9,61 @@ iMessage로 대화하는 개인 AI 비서. Mac Mini 서버에서 24시간 구동
 
 ```
 [iPhone] ──iMessage──> [Mac Mini 24h Server]
-                            ├── Watcher     chat.db polling (SQLite)
-                            ├── Brain       claude -p (Max subscription)
-                            ├── Memory      Markdown files + SQLite index
-                            ├── Scheduler   launchd/cron (proactive)
-                            └── Executor    shell commands
+                            ├── alf.py      chat.db 폴링 + 배선
+                            ├── brain.py    프롬프트 조립 + Claude 호출
+                            ├── memory.py   기억 읽기/쓰기/파싱
+                            ├── skills/     스킬 디렉토리 (1스킬=1디렉토리)
+                            ├── Scheduler   launchd/cron (P2)
+                            └── Executor    shell commands (P3)
 ```
 
-## Memory Structure
-
-Markdown이 기억, SQLite가 검색엔진. 모든 기억은 사람이 읽을 수 있는 파일.
+## Data Flow
 
 ```
-memory/
-├── about.md       ← 사용자 정보 (선호, 습관, 프로필)
-├── calendar.md    ← 일정/약속
-├── notes.md       ← 기억해달라고 한 것들
-└── history.jsonl  ← 전체 대화 로그 (raw)
-memory.db          ← SQLite 벡터 인덱스 (의미 검색용)
+메시지 수신 → memory.load_all()
+  → brain.build_system_prompt(페르소나 + 스킬 + 기억)
+  → brain.ask() → claude -p --model {model} --system-prompt "..."
+  → save_note.parse_and_save() → [NOTE:xxx] 파싱 → Apple Notes 저장
+  → memory.parse_and_save() → [MEM:xxx] 파싱 → 파일 저장
+  → memory.log_history()
+  → send_imessage(클린 응답)
 ```
 
-- Markdown = 진실의 원천 (투명, 디버깅 쉬움)
-- SQLite = 검색 인덱스 (의미 기반 + 키워드)
-- history.jsonl = 원본 대화 기록 (append-only)
+## Memory Protocol
+
+Claude 응답 끝에 기억 명령 추가 → memory.py가 파싱하여 파일 저장:
+```
+[MEM:about] 커피를 좋아함, 특히 아메리카노
+[MEM:calendar] 2026-03-05 14:00 팀 미팅
+[MEM:notes] 주말에 세탁기 AS 예약
+```
+
+## Note Protocol
+
+조사 요청 시 Claude가 `[NOTE:제목]...[/NOTE]` 블록 출력 → save_note.py가 Markdown→HTML 변환 → Apple Notes "Afred" 공유 폴더에 저장:
+```
+[NOTE:삼성전자 주가 분석]
+# 삼성전자 주가 분석
+## 요약
+...
+[/NOTE]
+```
+
+## Skills System
+
+- `skills/_base.md` — 항상 로딩되는 베이스 페르소나
+- `skills/*/SKILL.md` — YAML frontmatter로 `trigger: always | on-demand`
+- 스킬 추가 = 디렉토리 하나 추가. 코어 코드 수정 불필요.
+
+## Model Strategy
+
+```
+.env:
+ALF_MODEL_CHAT=sonnet      # 일반 대화
+ALF_MODEL_MEMORY=sonnet     # 기억 포함 응답
+```
+
+sonnet 통일. claude -p CLI 오버헤드로 haiku 속도 이점 미미, 스킬 프로토콜([MEM:], [NOTE:]) 정확도가 더 중요.
 
 ## Constraints
 
@@ -42,16 +74,9 @@ memory.db          ← SQLite 벡터 인덱스 (의미 검색용)
 
 ## Phases
 
-- **P1**: 기억하는 비서 — 대화 기억, 맥락 있는 답변
+- **P1**: 기억하는 비서 — 대화 기억, 맥락 있는 답변 ← **현재**
 - **P2**: 먼저 말 거는 비서 — 아침 브리핑, 일정 알림
 - **P3**: 실행하는 비서 — 명령 실행, 파일 관리, 자동화
-
-## Tech Stack
-
-- Python 3 + sqlite3 (chat.db 폴링)
-- `claude -p --model sonnet` (Claude Max 구독)
-- osascript (iMessage 발신)
-- python-dotenv (.env 설정)
 
 ## Code Style
 
