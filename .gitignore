@@ -6,7 +6,8 @@ __pycache__/
 *.db
 !schema/*.sql
 /memory/
-/data/*.json
+/data/*
+!/data/.gitkeep
 /run/
 /logs/
 /apps/

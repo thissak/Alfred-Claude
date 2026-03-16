@@ -1,5 +1,22 @@
 # Alf — Changelog
 
+## 2026-03-17
+
+- [feat] QMD 시맨틱 검색 연동 — `memory.py`에 `recall()`, `qmd_init()` 추가, 대화/기억 저장 시 마크다운 자동 동기화 (`data/qmd/`)
+- [feat] `brain.py` 프롬프트에 `## 관련 과거 대화` 섹션 추가 — QMD BM25 검색으로 현재 메시지와 관련된 과거 대화를 시스템 프롬프트에 주입
+- [feat] `alf.py` 파이프라인에 `memory.recall()` 단계 추가 — 메시지 처리 시 QMD 검색 (0.17초, Claude 호출 대비 무시 가능)
+- [feat] `skills/stock/` — 주식 리포트 스킬 (한투 API 연동, 시황/포트폴리오/급등주/외인기관 매매 리포트)
+
+## 2026-03-04
+
+- [feat] `memory.py` SQLite 전환 — 플랫파일(.md) → SQLite(alf.db), 선택적 로딩(about:전체, calendar:+-7일, notes:30일), 키워드 검색, 레거시 자동 마이그레이션
+- [feat] `scheduler.py` 내장 스케줄러 — at(1회)/daily(매일)/every(반복) 잡 관리, [SCHED:] 프로토콜로 Claude가 직접 스케줄 등록
+- [feat] `brain.py` 세션 컨텍스트 강화 — 최근 대화 5건 + 활성 스케줄 목록을 시스템 프롬프트에 주입
+- [feat] `alf.py` 스케줄러 통합 — 폴링 루프에서 만기 잡 체크 → Claude 호출 → 선제 발신
+- [feat] `skills/scheduler/` — 스케줄러 스킬 추가 ([SCHED:] 프로토콜 가이드)
+- [refactor] `alf.py` 메시지 처리 파이프라인 함수 분리 (handle_message, process_response, handle_scheduled_jobs)
+- [perf] 프로파일링 계측 추가 — alf.py/brain.py에 단계별 소요시간 측정 (timed 컨텍스트매니저)
+
 ## 2026-03-03
 
 - [feat] `daemon_ctl.py` — Swift 네이티브 .app 빌드 + launchd 데몬 관리 시스템 구현
