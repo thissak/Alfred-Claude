@@ -1,0 +1,19 @@
+{
+  "report_time": "21:00",
+  "watchlist": [
+    {"code": "005930", "name": "삼성전자"},
+    {"code": "000660", "name": "SK하이닉스"},
+    {"code": "322000", "name": "HD현대에너지솔루션"},
+    {"code": "0080G0", "name": "KODEX 방산TOP10"},
+    {"code": "471990", "name": "KODEX AI반도체핵심장비"},
+    {"code": "263750", "name": "펄어비스"}
+  ],
+  "watchlist_us": [
+    {"code": "AAPL", "name": "Apple", "excd": "NAS"},
+    {"code": "NVDA", "name": "NVIDIA", "excd": "NAS"},
+    {"code": "TSLA", "name": "Tesla", "excd": "NAS"},
+    {"code": "MSFT", "name": "Microsoft", "excd": "NAS"},
+    {"code": "AMZN", "name": "Amazon", "excd": "NAS"}
+  ],
+  "token_cache": "run/kis_token.json"
+}
