@@ -22,9 +22,20 @@
 - [x] 세션 컨텍스트 강화 (최근 대화 히스토리 + 활성 스케줄 주입)
 - [x] QMD 시맨틱 검색 연동 (과거 대화 recall → 프롬프트 주입)
 - [x] 주식 리포트 스킬 (한투 API + 매일 21:00 리포트)
+- [x] 장 마감 리포트 스킬 (Claude Code 풀 에이전트 + Apple Notes, 매일 16:00)
 - [ ] 아침 브리핑 스케줄 등록 + 실사용 검증
 - [ ] 일정 알림 실사용 검증
 - [ ] 24시간 스케줄러 안정성 확인
+
+## Phase 2.5: 아키텍처 전환 (bridge 모드)
+- [x] alf_bridge.py — iMessage ↔ inbox/outbox 파일 기반 브릿지
+- [x] process_inbox.py — inbox/outbox 헬퍼
+- [x] launchd 데몬 등록 (com.alf.bridge)
+- [x] 1초 폴링 적용
+- [x] Claude Code 풀 에이전트 자동 처리 연동 (inbox 감지 → 처리 → outbox)
+- [x] GPT Codex OAuth 연동 — process_inbox.py가 GPT-5.4로 자동 처리
+- [ ] alf.py(레거시) + brain.py 완전 대체 후 제거
+- [ ] 24시간 bridge 안정성 확인
 
 ## Phase 3: 실행하는 비서
 - [ ] 명령 실행 구조

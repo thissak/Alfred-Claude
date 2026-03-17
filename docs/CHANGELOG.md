@@ -2,10 +2,21 @@
 
 ## 2026-03-17
 
+- [feat] GPT Codex OAuth 연동 — ChatGPT 구독 + Codex OAuth 토큰으로 GPT-5.4 호출, API 비용 없이 LLM 사용 가능
+- [feat] `process_inbox.py` GPT 자동 처리 — inbox 폴링 → GPT-5.4 호출 → outbox 응답 작성, `--watch` 모드 지원
+- [feat] `scripts/start-alf-agent.sh` — tmux + Claude Code + /loop 으로 inbox 자동 감시 스크립트
+- [refactor] CLAUDE.md 아키텍처 업데이트 — brain.py/alf.py 레거시화, Claude Code 풀 에이전트 + bridge 모드 반영
 - [feat] QMD 시맨틱 검색 연동 — `memory.py`에 `recall()`, `qmd_init()` 추가, 대화/기억 저장 시 마크다운 자동 동기화 (`data/qmd/`)
 - [feat] `brain.py` 프롬프트에 `## 관련 과거 대화` 섹션 추가 — QMD BM25 검색으로 현재 메시지와 관련된 과거 대화를 시스템 프롬프트에 주입
 - [feat] `alf.py` 파이프라인에 `memory.recall()` 단계 추가 — 메시지 처리 시 QMD 검색 (0.17초, Claude 호출 대비 무시 가능)
 - [feat] `skills/stock/` — 주식 리포트 스킬 (한투 API 연동, 시황/포트폴리오/급등주/외인기관 매매 리포트)
+- [feat] `alf_bridge.py` — iMessage ↔ inbox/outbox 파일 기반 브릿지. alf.py(레거시)의 `claude -p` 의존을 제거하고, Claude Code 풀 에이전트가 처리하는 구조로 전환
+- [feat] `process_inbox.py` — inbox 메시지 읽기/outbox 응답 쓰기 헬퍼
+- [feat] `skills/report/` — 장 마감 리포트 스킬. Claude Code가 한투 API 데이터 분석 → Apple Notes 저장. launchd로 매일 16:00 자동 실행
+- [fix] `save_note.py` Apple Notes 폴더명 오타 "Afred" → "Alfred"
+- [refactor] `brain.py` `_load_feeds()` 범용화 — items 키 없는 JSON(stock.json 등)도 10KB 이하면 프롬프트에 주입
+- [chore] `daemon_ctl.py` bridge 데몬 등록, alf를 레거시로 표기
+- [chore] launchd plist 추가 — `com.alf.bridge` (iMessage 브릿지), `com.alf.report` (장 마감 리포트 16:00)
 
 ## 2026-03-04
 
