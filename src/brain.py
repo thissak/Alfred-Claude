@@ -194,20 +194,26 @@ def _load_feeds():
         source = feed.get("source", os.path.basename(path))
         updated = feed.get("updated_at", "")
         items = feed.get("items", [])
-        if not items:
-            continue
 
-        lines = [f"### {source} (갱신: {updated})"]
-        for item in items:
-            subj = item.get("subject", item.get("title", ""))
-            preview = item.get("preview", "")
-            sender = item.get("from", "")
-            date = item.get("date", "")
-            lines.append(f"- [{date}] {sender}: {subj}")
-            if preview:
-                lines.append(f"  > {preview[:100]}")
-
-        sections.append("\n".join(lines))
+        if items:
+            # items 기반 피드 (이메일 등)
+            lines = [f"### {source} (갱신: {updated})"]
+            for item in items:
+                subj = item.get("subject", item.get("title", ""))
+                preview = item.get("preview", "")
+                sender = item.get("from", "")
+                date = item.get("date", "")
+                lines.append(f"- [{date}] {sender}: {subj}")
+                if preview:
+                    lines.append(f"  > {preview[:100]}")
+            sections.append("\n".join(lines))
+        else:
+            # 범용 JSON (stock.json 등) — 10KB 이하만 통째로 주입
+            raw = json.dumps(feed, ensure_ascii=False, indent=2)
+            if len(raw) > 10_000:
+                continue
+            header = f"### {source} (갱신: {updated})" if updated else f"### {source}"
+            sections.append(header + "\n```json\n" + raw + "\n```")
 
     if not sections:
         return ""

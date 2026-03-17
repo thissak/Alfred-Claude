@@ -4,7 +4,7 @@ import re
 import subprocess
 
 
-FOLDER_NAME = "Afred"
+FOLDER_NAME = "Alfred"
 
 # NOTE 블록 파싱: [NOTE:제목]...[/NOTE]
 NOTE_PATTERN = re.compile(
@@ -156,7 +156,7 @@ def _save_to_notes(title, html):
     script = f'''
     tell application "Notes"
         tell account "iCloud"
-            make new note at folder "Afred" with properties {{name:"{escaped_title}", body:"{escaped_html}"}}
+            make new note at folder "Alfred" with properties {{name:"{escaped_title}", body:"{escaped_html}"}}
         end tell
     end tell'''
 

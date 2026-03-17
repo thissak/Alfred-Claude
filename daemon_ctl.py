@@ -18,8 +18,9 @@ PLIST_PREFIX = "com.alf"
 PYTHON = "/usr/bin/python3"
 
 DAEMONS = {
-    "alf":   {"script": "src/alf.py",             "desc": "iMessage 챗봇"},
-    "email": {"script": "daemons/email_daemon.py", "desc": "네이버 이메일 IMAP"},
+    "alf":    {"script": "src/alf.py",             "desc": "iMessage 챗봇 (레거시)"},
+    "bridge": {"script": "src/alf_bridge.py",      "desc": "iMessage ↔ inbox/outbox 브릿지"},
+    "email":  {"script": "daemons/email_daemon.py", "desc": "네이버 이메일 IMAP"},
 }
 
 
