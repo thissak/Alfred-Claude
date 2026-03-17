@@ -1,5 +1,18 @@
 # Alf — Changelog
 
+## 2026-03-18
+
+- [refactor] `AGENTS.md` 도입 — Codex 작업 규칙, runtime 운영 기준, 문서 우선순위 정리
+- [refactor] `CLAUDE.md` 축소 — 개요 문서로만 유지하고 운영 규칙은 `AGENTS.md`로 이동
+- [chore] handoff 문서 정리 — 오래된 POC/계정 세팅 handoff 제거, `codex-v2-refactor-plan`은 archived note로 전환
+- [feat] `src/runtime/scheduler_worker.py` import 부트스트랩 보강 — launchd 앱 번들 실행 시 `src` import 경로 문제 해결
+- [feat] `daemon_ctl.py` 운영 집합 정리 — `alf`를 기본 운영 데몬에서 제외하고 legacy로 분리
+- [test] runtime 스케줄 실제 E2E 검증 — `schedule` 워커가 GPT 응답 생성 후 bridge를 통해 실제 iMessage 발신 확인
+- [feat] `src/kis_readonly_client.py` 추가 — KIS 조회 전용 공용 client, 허용 endpoint/TR ID allowlist 적용
+- [refactor] `skills/stock/fetch_stock.py`, `skills/stock/screener.py` — KIS 직접 호출 제거, readonly client 경유로 통일
+- [test] KIS readonly 실조회 검증 — 지수, 국내 잔고, 당일 체결, 미국 잔고 조회 성공
+- [chore] KIS 환경변수 분리 — `KIS_READONLY_APP_KEY`, `KIS_READONLY_APP_SECRET`, `KIS_READONLY_ACCOUNT`
+
 ## 2026-03-17
 
 - [feat] GPT Codex OAuth 연동 — ChatGPT 구독 + Codex OAuth 토큰으로 GPT-5.4 호출, API 비용 없이 LLM 사용 가능

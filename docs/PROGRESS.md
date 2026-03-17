@@ -23,6 +23,8 @@
 - [x] QMD 시맨틱 검색 연동 (과거 대화 recall → 프롬프트 주입)
 - [x] 주식 리포트 스킬 (한투 API + 매일 21:00 리포트)
 - [x] 장 마감 리포트 스킬 (Claude Code 풀 에이전트 + Apple Notes, 매일 16:00)
+- [x] KIS 조회 전용 경로 분리 (`src/kis_readonly_client.py`, `KIS_READONLY_*`)
+- [x] KIS 실조회 검증 완료 (지수/국내잔고/체결/미국잔고)
 - [ ] 아침 브리핑 스케줄 등록 + 실사용 검증
 - [ ] 일정 알림 실사용 검증
 - [ ] 24시간 스케줄러 안정성 확인
@@ -31,13 +33,26 @@
 - [x] alf_bridge.py — iMessage ↔ inbox/outbox 파일 기반 브릿지
 - [x] process_inbox.py — inbox/outbox 헬퍼
 - [x] launchd 데몬 등록 (com.alf.bridge)
+- [x] launchd 데몬 등록 (com.alf.schedule)
 - [x] 1초 폴링 적용
 - [x] Claude Code 풀 에이전트 자동 처리 연동 (inbox 감지 → 처리 → outbox)
 - [x] GPT Codex OAuth 연동 — process_inbox.py가 GPT-5.4로 자동 처리
-- [ ] alf.py(레거시) + brain.py 완전 대체 후 제거
+- [x] 만기 스케줄 실행 경로 runtime으로 이동 (`src/runtime/scheduler_worker.py`)
+- [x] alf.py를 기본 운영 경로에서 퇴역 (`daemon_ctl.py` 기본 집합 제외)
+- [ ] alf.py(레거시) + brain.py 완전 제거
 - [ ] 24시간 bridge 안정성 확인
 
 ## Phase 3: 실행하는 비서
 - [ ] 명령 실행 구조
 - [ ] 파일 관리
 - [ ] 자동화
+
+## Phase 4: Codex Agent Runtime
+- [x] `runtime/orchestrator.py` 도입
+- [x] 이벤트 버스 초안 도입 (`message.received`, `schedule.due`)
+- [x] tool layer 1차 도입 (`memory`, `schedule`, `notes`)
+- [x] KIS readonly client 도입 (`src/kis_readonly_client.py`)
+- [ ] 메모리 계층 분리 (profile/task/episodic/knowledge/schedule)
+- [ ] tool layer 확장 (`email`, `stocks`)
+- [ ] proactive notifier 도입
+- [ ] `alf.py`, `brain.py` 레거시 제거

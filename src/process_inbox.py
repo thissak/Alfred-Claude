@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inbox 프로세서 — inbox 메시지를 GPT로 처리하고 outbox에 응답 작성.
+"""Inbox 프로세서 — inbox 메시지를 읽어 오케스트레이터에 전달.
 
 Usage:
   python3 src/process_inbox.py          # 한 번 처리
@@ -7,61 +7,18 @@ Usage:
 """
 
 import argparse
-import json
 import time
-from datetime import datetime
 from pathlib import Path
 
-import httpx
+import json
+
+try:
+    from runtime.orchestrator import MODEL, handle_inbox_message
+except ModuleNotFoundError:
+    from src.runtime.orchestrator import MODEL, handle_inbox_message
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 INBOX = PROJECT_ROOT / "run" / "inbox"
-OUTBOX = PROJECT_ROOT / "run" / "outbox"
-AUTH_PATH = Path.home() / ".codex" / "auth.json"
-
-MODEL = "gpt-5.4"
-SYSTEM_PROMPT = "You are a friendly Korean-speaking personal assistant. 간결하게 답해."
-
-
-def _get_token():
-    with open(AUTH_PATH) as f:
-        return json.load(f)["tokens"]["access_token"]
-
-
-def ask_gpt(message, system=SYSTEM_PROMPT):
-    """Codex OAuth 경유 GPT 호출."""
-    token = _get_token()
-    full = ""
-    with httpx.stream(
-        "POST",
-        "https://chatgpt.com/backend-api/codex/responses",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": MODEL,
-            "instructions": system,
-            "input": [{"role": "user", "content": message}],
-            "store": False,
-            "stream": True,
-        },
-        timeout=60,
-    ) as r:
-        if r.status_code != 200:
-            raise RuntimeError(f"GPT error {r.status_code}: {r.read().decode()[:200]}")
-        for line in r.iter_lines():
-            if line.startswith("data: "):
-                chunk = line[6:]
-                if chunk == "[DONE]":
-                    break
-                try:
-                    d = json.loads(chunk)
-                    if d.get("type") == "response.output_text.delta":
-                        full += d.get("delta", "")
-                except json.JSONDecodeError:
-                    pass
-    return full
 
 
 def get_pending():
@@ -78,34 +35,8 @@ def get_pending():
     return msgs
 
 
-def write_response(recipient, message):
-    OUTBOX.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    resp = {
-        "recipient": recipient,
-        "message": message,
-        "timestamp": datetime.now().isoformat(),
-    }
-    path = OUTBOX / f"{ts}.json"
-    path.write_text(json.dumps(resp, ensure_ascii=False, indent=2))
-    print(f"  [outbox] {path.name}")
-    return path
-
-
-def mark_done(msg):
-    Path(msg["_path"]).unlink(missing_ok=True)
-
-
 def process(msg):
-    sender = msg["sender"]
-    text = msg["message"]
-    print(f"[수신] {sender}: {text}")
-
-    reply = ask_gpt(text)
-    print(f"[응답] {reply}")
-
-    write_response(sender, reply)
-    mark_done(msg)
+    handle_inbox_message(msg)
 
 
 def main():

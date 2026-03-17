@@ -20,8 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_PATH = ROOT / "data"
 CACHE_DIR = ROOT / "run" / "master"
 
-sys.path.insert(0, str(ROOT / "skills" / "stock"))
-from fetch_stock import _get
+sys.path.insert(0, str(ROOT / "src"))
+from kis_readonly_client import get as kis_get
 
 
 def _download_master(market):
@@ -125,7 +125,7 @@ def fetch_income_years(code, years=4):
 
     Returns: list of (year, oper_profit) or None on failure.
     """
-    data = _get(
+    data = kis_get(
         "/uapi/domestic-stock/v1/finance/income-statement",
         "FHKST66430200",
         {

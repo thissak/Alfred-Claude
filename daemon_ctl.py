@@ -2,6 +2,7 @@
 """daemon_ctl.py — Alf 데몬 매니저. dev(Popen) + prod(launchd) 통합 관리."""
 
 import argparse
+import json
 import os
 import plistlib
 import signal
@@ -18,10 +19,37 @@ PLIST_PREFIX = "com.alf"
 PYTHON = "/usr/bin/python3"
 
 DAEMONS = {
-    "alf":    {"script": "src/alf.py",             "desc": "iMessage 챗봇 (레거시)"},
-    "bridge": {"script": "src/alf_bridge.py",      "desc": "iMessage ↔ inbox/outbox 브릿지"},
-    "email":  {"script": "daemons/email_daemon.py", "desc": "네이버 이메일 IMAP"},
+    "bridge": {
+        "script": "src/alf_bridge.py",
+        "args": [],
+        "desc": "iMessage ↔ inbox/outbox 브릿지",
+    },
+    "inbox": {
+        "script": "src/process_inbox.py",
+        "args": ["--watch"],
+        "desc": "inbox 감시 + GPT 응답 작성",
+    },
+    "schedule": {
+        "script": "src/runtime/scheduler_worker.py",
+        "args": [],
+        "desc": "만기 스케줄 실행 + outbox 응답 작성",
+    },
+    "email": {
+        "script": "daemons/email_daemon.py",
+        "args": [],
+        "desc": "네이버 이메일 IMAP",
+    },
 }
+
+LEGACY_DAEMONS = {
+    "alf": {
+        "script": "src/alf.py",
+        "args": [],
+        "desc": "iMessage 챗봇 (레거시, 퇴역)",
+    },
+}
+
+ALL_DAEMONS = {**DAEMONS, **LEGACY_DAEMONS}
 
 
 def _pid_file(name):
@@ -34,6 +62,10 @@ def _log_file(name):
 
 def _plist_path(name):
     return os.path.join(PLIST_DIR, f"{PLIST_PREFIX}.{name}.plist")
+
+
+def _launchd_domain():
+    return f"gui/{os.getuid()}"
 
 
 def _app_path(name):
@@ -50,9 +82,13 @@ def _build_app(name, force=False):
     if os.path.exists(app) and not force:
         return app
 
-    script = os.path.join(PROJECT_ROOT, DAEMONS[name]["script"])
+    script = os.path.join(PROJECT_ROOT, ALL_DAEMONS[name]["script"])
+    args = ALL_DAEMONS[name].get("args", [])
     log = _log_file(name)
     bundle_id = f"{PLIST_PREFIX}.{name}"
+    swift_args = json.dumps(["-u", script] + args, ensure_ascii=False)
+    os.makedirs(os.path.dirname(log), exist_ok=True)
+    open(log, "a").close()
 
     # 디렉토리 구조
     macos_dir = os.path.join(app, "Contents", "MacOS")
@@ -63,7 +99,7 @@ def _build_app(name, force=False):
         import Foundation
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "{PYTHON}")
-        proc.arguments = ["-u", "{script}"]
+        proc.arguments = {swift_args}
         proc.currentDirectoryURL = URL(fileURLWithPath: "{PROJECT_ROOT}")
         let log = FileHandle(forWritingAtPath: "{log}") ?? FileHandle.nullDevice
         log.seekToEndOfFile()
@@ -122,17 +158,39 @@ def _launchd_status(name):
     if r.returncode != 0:
         return None
     for line in r.stdout.splitlines():
-        if '"PID"' in line:
+        if '"PID"' in line or line.strip().startswith('"PID" ='):
             pid = "".join(c for c in line if c.isdigit())
             return int(pid) if pid else "loaded"
     return "loaded"
 
 
+def _launchctl_bootstrap(plist_path):
+    domain = _launchd_domain()
+    subprocess.run(
+        ["launchctl", "bootout", domain, plist_path],
+        capture_output=True,
+        text=True,
+    )
+    return subprocess.run(
+        ["launchctl", "bootstrap", domain, plist_path],
+        capture_output=True,
+        text=True,
+    )
+
+
+def _launchctl_bootout(plist_path):
+    return subprocess.run(
+        ["launchctl", "bootout", _launchd_domain(), plist_path],
+        capture_output=True,
+        text=True,
+    )
+
+
 def _resolve_names(name):
     if name == "all":
         return list(DAEMONS.keys())
-    if name not in DAEMONS:
-        print(f"알 수 없는 데몬: {name} (가능: {', '.join(DAEMONS)})")
+    if name not in ALL_DAEMONS:
+        print(f"알 수 없는 데몬: {name} (가능: {', '.join(ALL_DAEMONS)})")
         sys.exit(1)
     return [name]
 
@@ -146,10 +204,11 @@ def cmd_start(args):
         if _read_pid(name):
             print(f"[{name}] 이미 실행 중 (PID {_read_pid(name)})")
             continue
-        script = os.path.join(PROJECT_ROOT, DAEMONS[name]["script"])
+        script = os.path.join(PROJECT_ROOT, ALL_DAEMONS[name]["script"])
+        cmd = [PYTHON, "-u", script] + ALL_DAEMONS[name].get("args", [])
         log = open(_log_file(name), "a")
         proc = subprocess.Popen(
-            [PYTHON, "-u", script],
+            cmd,
             cwd=PROJECT_ROOT,
             stdout=log, stderr=log,
         )
@@ -172,7 +231,7 @@ def cmd_stop(args):
 def cmd_status(args):
     names = _resolve_names(args.name) if args.name else list(DAEMONS.keys())
     for name in names:
-        d = DAEMONS[name]
+        d = ALL_DAEMONS[name]
         dev_pid = _read_pid(name)
         ld = _launchd_status(name)
         if dev_pid:
@@ -181,6 +240,8 @@ def cmd_status(args):
             state = f"launchd 실행 중 (PID {ld})"
         elif ld:
             state = "launchd loaded (프로세스 없음)"
+        elif os.path.exists(_plist_path(name)):
+            state = "launchd 등록됨 (상태 조회 제한)"
         else:
             state = "정지"
         print(f"  {name:8s} {state:40s} {d['desc']}")
@@ -201,7 +262,7 @@ def cmd_install(args):
     names = _resolve_names(args.name)
     fda_apps = []
     for name in names:
-        app = _build_app(name)
+        app = _build_app(name, force=True)
         label = f"{PLIST_PREFIX}.{name}"
         bundle_id = f"{PLIST_PREFIX}.{name}"
         plist = {
@@ -219,7 +280,9 @@ def cmd_install(args):
         path = _plist_path(name)
         with open(path, "wb") as f:
             plistlib.dump(plist, f)
-        subprocess.run(["launchctl", "load", path])
+        result = _launchctl_bootstrap(path)
+        if result.returncode != 0:
+            print(f"[{name}] launchctl bootstrap 경고: {result.stderr.strip()}")
         fda_apps.append(app)
         print(f"[{name}] launchd 등록 완료 — {path}")
     print(f"\n전체 디스크 접근에 .app 등록 필요:")
@@ -233,7 +296,9 @@ def cmd_uninstall(args):
         if not os.path.exists(path):
             print(f"[{name}] plist 없음")
             continue
-        subprocess.run(["launchctl", "unload", path])
+        result = _launchctl_bootout(path)
+        if result.returncode != 0 and "No such process" not in (result.stderr or ""):
+            print(f"[{name}] launchctl bootout 경고: {result.stderr.strip()}")
         os.remove(path)
         print(f"[{name}] launchd 해제 + plist 삭제")
 
