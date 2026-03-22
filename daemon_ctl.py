@@ -27,7 +27,7 @@ DAEMONS = {
     "inbox": {
         "script": "src/process_inbox.py",
         "args": ["--watch"],
-        "desc": "inbox 감시 + GPT 응답 작성",
+        "desc": "inbox 감시 + Claude 응답 작성",
     },
     "schedule": {
         "script": "src/runtime/scheduler_worker.py",
@@ -41,15 +41,7 @@ DAEMONS = {
     },
 }
 
-LEGACY_DAEMONS = {
-    "alf": {
-        "script": "src/alf.py",
-        "args": [],
-        "desc": "iMessage 챗봇 (레거시, 퇴역)",
-    },
-}
-
-ALL_DAEMONS = {**DAEMONS, **LEGACY_DAEMONS}
+ALL_DAEMONS = DAEMONS
 
 
 def _pid_file(name):

@@ -27,13 +27,6 @@ src/runtime/scheduler_worker.py
 -> src/alf_bridge.py
 ```
 
-Legacy path:
-
-- `src/alf.py`
-- `src/brain.py`
-
-These are retired from the default daemon set and should not be used for new work unless explicitly needed for rollback.
-
 ## Source Of Truth
 
 - Current progress: `docs/PROGRESS.md`
@@ -46,7 +39,6 @@ If a handoff doc conflicts with an ADR or current code, trust the code first, th
 ## Working Rules
 
 - Address the user as `감독님`.
-- Prefer changing the runtime path over extending legacy `alf.py`.
 - Keep bridge mode stable. Do not break `run/inbox` and `run/outbox` contracts.
 - Keep data local unless the task explicitly needs an external service.
 - Avoid destructive actions on launchd, logs, memory DB, or message DB without clear need.

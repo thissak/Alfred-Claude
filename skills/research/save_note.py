@@ -148,8 +148,8 @@ def parse_and_save(response):
     return clean, saved
 
 
-def _save_to_notes(title, html):
-    """AppleScript로 Afred 공유 폴더에 노트 생성."""
+def _save_to_notes(title, html, retries=2, timeout=30):
+    """AppleScript로 Alfred 공유 폴더에 노트 생성. 타임아웃 + 재시도."""
     escaped_title = title.replace('"', '\\"')
     escaped_html = html.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -160,10 +160,16 @@ def _save_to_notes(title, html):
         end tell
     end tell'''
 
-    result = subprocess.run(
-        ["osascript", "-e", script], capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        print(f"[노트 저장 실패] {result.stderr.strip()}")
-        return False
-    return True
+    for attempt in range(1, retries + 1):
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True, text=True, timeout=timeout,
+            )
+            if result.returncode == 0:
+                return True
+            print(f"[노트 저장 실패] 시도 {attempt}/{retries}: {result.stderr.strip()}")
+        except subprocess.TimeoutExpired:
+            print(f"[노트 저장 타임아웃] 시도 {attempt}/{retries}: {timeout}초 초과")
+
+    return False

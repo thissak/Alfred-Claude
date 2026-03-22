@@ -1,14 +1,15 @@
 """이벤트 기반 메시지 오케스트레이터.
 
-첫 단계에서는 inbox 메시지를 받아 GPT 응답을 생성하고 outbox에 적재한다.
-추후 memory/tool/notifier 결합 지점으로 확장한다.
+inbox 메시지를 받아 Claude 응답을 생성하고 outbox에 적재한다.
 """
 
+import glob
 import json
+import os
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
-
-import httpx
 
 try:
     import memory as legacy_memory
@@ -29,10 +30,11 @@ except ModuleNotFoundError:
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 OUTBOX = PROJECT_ROOT / "run" / "outbox"
-AUTH_PATH = Path.home() / ".codex" / "auth.json"
+SKILLS_DIR = str(PROJECT_ROOT / "skills")
+DATA_DIR = str(PROJECT_ROOT / "data")
+CLAUDE_CLI = "/Users/afred/.local/bin/claude"
 
-MODEL = "gpt-5.4"
-SYSTEM_PROMPT = "You are a friendly Korean-speaking personal assistant. 간결하게 답해."
+MODEL = os.environ.get("ALF_MODEL_CHAT", "sonnet")
 MEMORY_PROTOCOL = """When the user shares a durable preference, profile fact, plan, or note worth remembering, append memory commands on separate trailing lines:
 [MEM:about] stable preference or profile fact
 [MEM:calendar] dated plan or appointment
@@ -63,58 +65,124 @@ def ensure_runtime_ready():
     _runtime_initialized = True
 
 
+def _load_skills():
+    """skills/*/SKILL.md 중 trigger=always인 것들의 전문 로딩."""
+    skills = []
+    if not os.path.isdir(SKILLS_DIR):
+        return skills
+    for name in sorted(os.listdir(SKILLS_DIR)):
+        skill_path = os.path.join(SKILLS_DIR, name, "SKILL.md")
+        if not os.path.isfile(skill_path):
+            continue
+        content = open(skill_path).read()
+        if content.startswith("---"):
+            end = content.find("---", 3)
+            if end != -1:
+                frontmatter = content[3:end]
+                if "trigger: on-demand" in frontmatter:
+                    continue
+                skills.append(content[end + 3:].strip())
+            else:
+                skills.append(content)
+        else:
+            skills.append(content)
+    return skills
+
+
+def _load_feeds():
+    """data/*.json 자동 로딩 → 프롬프트 섹션 생성."""
+    if not os.path.isdir(DATA_DIR):
+        return ""
+    sections = []
+    for path in sorted(glob.glob(os.path.join(DATA_DIR, "*.json"))):
+        try:
+            with open(path, encoding="utf-8") as f:
+                feed = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        source = feed.get("source", os.path.basename(path))
+        updated = feed.get("updated_at", "")
+        items = feed.get("items", [])
+        if items:
+            lines = [f"### {source} (갱신: {updated})"]
+            for item in items:
+                subj = item.get("subject", item.get("title", ""))
+                preview = item.get("preview", "")
+                sender = item.get("from", "")
+                date = item.get("date", "")
+                lines.append(f"- [{date}] {sender}: {subj}")
+                if preview:
+                    lines.append(f"  > {preview[:100]}")
+            sections.append("\n".join(lines))
+        else:
+            raw = json.dumps(feed, ensure_ascii=False, indent=2)
+            if len(raw) > 10_000:
+                continue
+            header = f"### {source} (갱신: {updated})" if updated else f"### {source}"
+            sections.append(header + "\n```json\n" + raw + "\n```")
+    if not sections:
+        return ""
+    return "## 데이터 피드\n\n" + "\n\n".join(sections)
+
+
 def build_system_prompt(message):
-    """기본 지시문과 메시지별 메모리 컨텍스트를 합친다."""
+    """페르소나 + 스킬 + 피드 + 프로토콜 + 메모리 컨텍스트를 조합."""
+    parts = []
+
+    # 0. 현재 날짜/시간
+    now = datetime.now()
+    weekdays = ["월", "화", "수", "목", "금", "토", "일"]
+    parts.append(f"현재: {now.strftime('%Y-%m-%d')}({weekdays[now.weekday()]}) {now.strftime('%H:%M')}")
+
+    # 1. 베이스 페르소나
+    base_path = os.path.join(SKILLS_DIR, "_base.md")
+    if os.path.exists(base_path):
+        parts.append(open(base_path).read().strip())
+
+    # 2. 스킬
+    for skill_content in _load_skills():
+        parts.append(skill_content)
+
+    # 3. 데이터 피드
+    feeds = _load_feeds()
+    if feeds:
+        parts.append(feeds)
+
+    # 4. 프로토콜
+    parts.extend([MEMORY_PROTOCOL, SCHEDULE_PROTOCOL, NOTE_PROTOCOL])
+
+    # 5. 메모리 컨텍스트
     context = build_message_context(message)
-    parts = [SYSTEM_PROMPT, MEMORY_PROTOCOL, SCHEDULE_PROTOCOL, NOTE_PROTOCOL]
-    if not context:
-        return "\n\n".join(parts)
-    parts.append(context)
-    return "\n\n".join(parts)
+    if context:
+        parts.append(context)
+
+    return "\n\n---\n\n".join(parts)
 
 
-def _get_token():
-    with open(AUTH_PATH) as f:
-        return json.load(f)["tokens"]["access_token"]
+def ask_claude(message, system=""):
+    """Claude CLI 호출."""
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
 
+    cmd = [
+        CLAUDE_CLI, "-p",
+        "--model", MODEL,
+        "--output-format", "json",
+        "--allowedTools", "mcp__fetch", "WebFetch", "WebSearch", "Read",
+        "--system-prompt", system,
+        message,
+    ]
+    print(f"[brain] claude -p model={MODEL}")
 
-def ask_gpt(message, system=SYSTEM_PROMPT):
-    """Codex OAuth 경유 GPT 호출."""
-    token = _get_token()
-    full = ""
-    with httpx.stream(
-        "POST",
-        "https://chatgpt.com/backend-api/codex/responses",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": MODEL,
-            "instructions": system,
-            "input": [{"role": "user", "content": message}],
-            "store": False,
-            "stream": True,
-        },
-        timeout=60,
-    ) as response:
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"GPT error {response.status_code}: {response.read().decode()[:200]}"
-            )
-        for line in response.iter_lines():
-            if not line.startswith("data: "):
-                continue
-            chunk = line[6:]
-            if chunk == "[DONE]":
-                break
-            try:
-                data = json.loads(chunk)
-            except json.JSONDecodeError:
-                continue
-            if data.get("type") == "response.output_text.delta":
-                full += data.get("delta", "")
-    return full
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=120, env=env,
+    )
+    if result.returncode != 0:
+        print(f"[claude 에러] {result.stderr.strip()}")
+        return ""
+
+    data = json.loads(result.stdout)
+    return data.get("result", "")
 
 
 def write_response(recipient, message):
@@ -152,8 +220,21 @@ def handle_event(event):
     print(f"[event] {event['type']} from={sender}")
     print(f"[수신] {sender}: {text}")
 
+    # 중복 처리 방지: 처리 시작 시 즉시 inbox 파일 제거
+    mark_done(event)
+
+    # 주식 관련 키워드 감지 → data/stock.json 실시간 갱신
+    _STOCK_KEYWORDS = ["미장", "주식", "시황", "종목", "주가", "포트폴리오", "내 주식", "급등", "거래량"]
+    if any(kw in text for kw in _STOCK_KEYWORDS):
+        print("[stock] 주식 키워드 감지 → fetch_stock.py 실행")
+        subprocess.run(
+            [sys.executable, str(PROJECT_ROOT / "skills" / "stock" / "fetch_stock.py")],
+            cwd=str(PROJECT_ROOT),
+            timeout=30,
+        )
+
     system_prompt = build_system_prompt(text)
-    raw_reply = ask_gpt(text, system=system_prompt)
+    raw_reply = ask_claude(text, system=system_prompt)
     reply, note_saved = clean_and_store_note(raw_reply)
     reply, schedule_actions = clean_and_store_schedule(reply)
     reply, saved_memories = clean_and_store(reply)
@@ -167,7 +248,12 @@ def handle_event(event):
 
     log_history(text, reply)
     write_response(sender, reply)
-    mark_done(event)
+
+    # compact 체크 (응답 발송 후)
+    if legacy_memory.needs_compaction():
+        print("[compact] 임계값 초과, 히스토리 압축 시작")
+        legacy_memory.compact_history()
+
     return reply
 
 
@@ -180,7 +266,7 @@ def handle_scheduled_job(job, recipient):
     print(f"[수신] {prompt}")
 
     system_prompt = build_system_prompt(prompt)
-    raw_reply = ask_gpt(prompt, system=system_prompt)
+    raw_reply = ask_claude(prompt, system=system_prompt)
     reply, note_saved = clean_and_store_note(raw_reply)
     reply, schedule_actions = clean_and_store_schedule(reply)
     reply, saved_memories = clean_and_store(reply)

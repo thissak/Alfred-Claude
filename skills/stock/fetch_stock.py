@@ -27,7 +27,7 @@ def fetch_market_index():
     """KOSPI / KOSDAQ 지수"""
     result = {}
     for code, name in [("0001", "KOSPI"), ("1001", "KOSDAQ")]:
-        data = _get(
+        data = kis_get(
             "/uapi/domestic-stock/v1/quotations/inquire-index-price",
             "FHPUP02100000",
             {"FID_COND_MRKT_DIV_CODE": "U", "FID_INPUT_ISCD": code},

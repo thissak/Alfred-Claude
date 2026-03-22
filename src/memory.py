@@ -1,23 +1,29 @@
-"""메모리 관리 — SQLite 기반 기억 저장/로딩/검색 + QMD 시맨틱 검색."""
+"""메모리 관리 — SQLite 기반 기억 저장/로딩.
+
+1M 컨텍스트를 활용해 전체 메모리+히스토리를 로드한다.
+별도 검색 인프라(FTS5, 벡터) 없이 LLM이 직접 시맨틱 매칭을 수행.
+"""
 
 import json
 import os
 import re
-import shutil
 import sqlite3
 import subprocess
-from datetime import datetime, timedelta
+from collections import defaultdict
+from datetime import datetime
 
 MEMORY_DIR = os.path.join(os.path.dirname(__file__), "..", "memory")
 DB_PATH = os.path.join(MEMORY_DIR, "alf.db")
-QMD_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "qmd")
-QMD_BIN = shutil.which("qmd")
-QMD_COLLECTION = "alf"
 
 # [MEM:about] 내용, [MEM:calendar] 내용, [MEM:notes] 내용
 MEM_PATTERN = re.compile(r"\[MEM:(\w+)\]\s*(.+)")
 
 VALID_TYPES = {"about", "calendar", "notes"}
+
+# compaction 설정
+COMPACT_THRESHOLD = 500   # 이 건수 초과 시 compact 트리거
+COMPACT_KEEP_RECENT = 50  # 최근 N건은 원문 유지
+CLAUDE_CLI = "/Users/afred/.local/bin/claude"
 
 _conn = None
 
@@ -54,13 +60,30 @@ def init():
     """)
     conn.commit()
     _migrate_legacy(conn)
+    _cleanup_fts(conn)
+
+
+def _cleanup_fts(conn):
+    """불필요한 FTS5 테이블/트리거 정리 (레거시)."""
+    for table in ["memories_fts", "history_fts"]:
+        try:
+            conn.execute(f"DROP TABLE IF EXISTS {table}")
+        except sqlite3.OperationalError:
+            pass
+    for trigger in ["memories_ai", "memories_ad", "memories_au",
+                     "history_ai", "history_ad"]:
+        try:
+            conn.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+        except sqlite3.OperationalError:
+            pass
+    conn.commit()
 
 
 def _migrate_legacy(conn):
     """기존 .md 파일 → SQLite 1회 마이그레이션."""
     count = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
     if count > 0:
-        return  # 이미 데이터 있으면 스킵
+        return
 
     migrated = 0
     for mem_type in VALID_TYPES:
@@ -72,7 +95,6 @@ def _migrate_legacy(conn):
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                # "- 내용 (2026-03-01)" 형식 파싱
                 content = line.lstrip("- ").strip()
                 date_match = re.search(r"\((\d{4}-\d{2}-\d{2})\)$", content)
                 if date_match:
@@ -87,7 +109,6 @@ def _migrate_legacy(conn):
                     )
                     migrated += 1
 
-    # history.jsonl 마이그레이션
     hist_path = os.path.join(MEMORY_DIR, "history.jsonl")
     if os.path.exists(hist_path):
         with open(hist_path) as f:
@@ -110,62 +131,40 @@ def _migrate_legacy(conn):
 # ── 로딩 ──────────────────────────────────────────────
 
 def load_all():
-    """프롬프트용 메모리 컨텍스트 생성 (선택적 로딩)."""
+    """전체 메모리를 컨텍스트용으로 로드. 1M 컨텍스트를 활용해 필터 없이 전부 주입."""
     conn = _get_conn()
     sections = []
 
-    # about: 전부 (유저 프로필은 항상 필요)
-    rows = conn.execute(
-        "SELECT content, created_at FROM memories WHERE type='about' ORDER BY created_at"
-    ).fetchall()
-    if rows:
-        lines = [f"- {r['content']}" for r in rows]
-        sections.append("### 프로필\n" + "\n".join(lines))
-
-    # calendar: 오늘 기준 ±7일
-    now = datetime.now()
-    cal_start = (now - timedelta(days=1)).strftime("%Y-%m-%d")
-    cal_end = (now + timedelta(days=7)).strftime("%Y-%m-%d")
-    rows = conn.execute(
-        "SELECT content, created_at FROM memories WHERE type='calendar' "
-        "AND content LIKE '%20%-%' ORDER BY content",  # 날짜 포함 항목
-    ).fetchall()
-    if rows:
-        lines = [f"- {r['content']}" for r in rows]
-        sections.append("### 일정\n" + "\n".join(lines))
-
-    # notes: 최근 30일
-    notes_since = (now - timedelta(days=30)).strftime("%Y-%m-%d")
-    rows = conn.execute(
-        "SELECT content, created_at FROM memories WHERE type='notes' "
-        "AND created_at >= ? ORDER BY created_at DESC LIMIT 20",
-        (notes_since,),
-    ).fetchall()
-    if rows:
-        lines = [f"- {r['content']}" for r in rows]
-        sections.append("### 메모\n" + "\n".join(lines))
+    for mem_type, label in [("about", "프로필"), ("calendar", "일정"),
+                             ("notes", "메모"), ("episode", "과거 대화 요약")]:
+        rows = conn.execute(
+            "SELECT content, created_at FROM memories WHERE type=? ORDER BY created_at",
+            (mem_type,),
+        ).fetchall()
+        if rows:
+            lines = [f"- [{r['created_at'][:10]}] {r['content']}" for r in rows]
+            sections.append(f"### {label}\n" + "\n".join(lines))
 
     return "\n\n".join(sections) if sections else ""
 
 
-def search(query, limit=10):
-    """키워드 기반 메모리 검색."""
+def load_history():
+    """전체 대화 히스토리 로드."""
     conn = _get_conn()
-    keywords = query.split()
-    if not keywords:
-        return []
-    where = " AND ".join(["content LIKE ?"] * len(keywords))
-    params = [f"%{kw}%" for kw in keywords]
     rows = conn.execute(
-        f"SELECT type, content, created_at FROM memories "
-        f"WHERE {where} ORDER BY created_at DESC LIMIT ?",
-        params + [limit],
+        "SELECT user_msg, alf_msg, created_at FROM history ORDER BY id"
     ).fetchall()
-    return [dict(r) for r in rows]
+    if not rows:
+        return ""
+    lines = []
+    for r in rows:
+        lines.append(f"[{r['created_at'][:16]}] User: {r['user_msg']}")
+        lines.append(f"[{r['created_at'][:16]}] Alf: {r['alf_msg'][:300]}")
+    return "### 대화 기록\n" + "\n".join(lines)
 
 
 def get_recent_history(limit=5):
-    """최근 대화 히스토리 반환."""
+    """최근 대화 히스토리 반환 (호환용)."""
     conn = _get_conn()
     rows = conn.execute(
         "SELECT user_msg, alf_msg, created_at FROM history "
@@ -201,128 +200,115 @@ def parse_and_save(response):
         conn.commit()
         saved = ", ".join(f"{t}:{c[:20]}" for t, c in memories)
         print(f"[기억 저장] {saved}")
-        # QMD 동기화
-        for mem_type, content in memories:
-            row_id = conn.execute("SELECT MAX(id) FROM memories").fetchone()[0]
-            _sync_memory_to_qmd(mem_type, content, row_id)
 
     return "\n".join(clean_lines).rstrip()
 
 
 def log_history(user_msg, reply):
-    """대화 기록 저장 + QMD용 마크다운 동기화."""
+    """대화 기록 저장."""
     conn = _get_conn()
     conn.execute(
         "INSERT INTO history (user_msg, alf_msg) VALUES (?, ?)",
         (user_msg, reply),
     )
     conn.commit()
-    # QMD 인덱스용 마크다운 파일 생성
-    row = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    _sync_history_to_qmd(row, user_msg, reply)
-
-
-# ── QMD 연동 ──────────────────────────────────────────
-
-def _sync_history_to_qmd(row_id, user_msg, alf_msg):
-    """대화 1건을 QMD용 마크다운 파일로 저장."""
-    if not QMD_BIN:
-        return
-    os.makedirs(QMD_DIR, exist_ok=True)
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    fname = f"conv-{row_id:04d}.md"
-    path = os.path.join(QMD_DIR, fname)
-    with open(path, "w") as f:
-        f.write(f"# 대화 #{row_id} ({now})\n\n")
-        f.write(f"**사용자**: {user_msg}\n\n")
-        f.write(f"**알프**: {alf_msg}\n")
-
-
-def _sync_memory_to_qmd(mem_type, content, mem_id):
-    """기억 1건을 QMD용 마크다운 파일로 저장."""
-    if not QMD_BIN:
-        return
-    os.makedirs(QMD_DIR, exist_ok=True)
-    now = datetime.now().strftime("%Y-%m-%d")
-    fname = f"mem-{mem_type}-{mem_id:04d}.md"
-    path = os.path.join(QMD_DIR, fname)
-    with open(path, "w") as f:
-        f.write(f"# 기억:{mem_type} ({now})\n\n{content}\n")
-
-
-def qmd_init():
-    """QMD 컬렉션 초기 설정 + 기존 데이터 동기화."""
-    if not QMD_BIN:
-        print("[qmd] qmd 미설치, 스킵")
-        return
-
-    os.makedirs(QMD_DIR, exist_ok=True)
-
-    # 컬렉션 존재 확인
-    result = subprocess.run(
-        [QMD_BIN, "collection", "list"], capture_output=True, text=True
-    )
-    if QMD_COLLECTION in result.stdout:
-        # 이미 등록됨 — update만
-        subprocess.run([QMD_BIN, "update"], capture_output=True, text=True)
-        return
-
-    # 기존 히스토리 + 메모리를 마크다운으로 내보내기
-    conn = _get_conn()
-    rows = conn.execute(
-        "SELECT id, user_msg, alf_msg, created_at FROM history ORDER BY id"
-    ).fetchall()
-    for r in rows:
-        _sync_history_to_qmd(r["id"], r["user_msg"], r["alf_msg"])
-
-    rows = conn.execute(
-        "SELECT id, type, content FROM memories ORDER BY id"
-    ).fetchall()
-    for r in rows:
-        _sync_memory_to_qmd(r["type"], r["content"], r["id"])
-
-    # 컬렉션 등록
-    subprocess.run(
-        [QMD_BIN, "collection", "add", QMD_DIR, "--name", QMD_COLLECTION],
-        capture_output=True, text=True,
-    )
-    subprocess.run(
-        [QMD_BIN, "context", "add", f"qmd://{QMD_COLLECTION}",
-         "Alf AI 비서와 사용자 간의 대화 기록 및 기억"],
-        capture_output=True, text=True,
-    )
-    print(f"[qmd] 컬렉션 '{QMD_COLLECTION}' 생성 완료")
 
 
 def recall(query, limit=5):
-    """QMD BM25 검색으로 관련 과거 대화/기억 회상."""
-    if not QMD_BIN:
-        return ""
-    try:
-        result = subprocess.run(
-            [QMD_BIN, "search", query, "--json", "-n", str(limit)],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode != 0:
-            return ""
-        hits = json.loads(result.stdout)
-        if not hits:
-            return ""
+    """호환용 — 전체 로드 방식에서는 사용하지 않음."""
+    return ""
 
-        lines = []
-        for hit in hits:
-            score = hit.get("score", 0)
-            if score < 0.3:
-                continue
-            snippet = hit.get("snippet", "").strip()
-            if not snippet:
-                continue
-            # QMD diff 마커 제거, 깔끔한 텍스트만 추출
-            clean = re.sub(r"@@ .+? @@.*?\n", "", snippet)
-            clean = clean.strip()
-            if clean:
-                lines.append(f"- {clean[:200]}")
-        return "\n".join(lines) if lines else ""
+
+# ── Compaction ──────────────────────────────────────────
+
+def needs_compaction():
+    """compact이 필요한지 확인."""
+    conn = _get_conn()
+    count = conn.execute("SELECT COUNT(*) FROM history").fetchone()[0]
+    return count > COMPACT_THRESHOLD
+
+
+def compact_history():
+    """오래된 히스토리를 날짜별 요약으로 압축.
+
+    최근 COMPACT_KEEP_RECENT건은 원문 유지.
+    나머지는 Claude로 요약 → episode 타입 메모리로 저장 → 원본 삭제.
+    """
+    conn = _get_conn()
+    count = conn.execute("SELECT COUNT(*) FROM history").fetchone()[0]
+    if count <= COMPACT_THRESHOLD:
+        print(f"[compact] 불필요 ({count}/{COMPACT_THRESHOLD}건)")
+        return 0
+
+    # 최근 N건의 최소 id 구하기
+    keep_row = conn.execute(
+        "SELECT id FROM history ORDER BY id DESC LIMIT 1 OFFSET ?",
+        (COMPACT_KEEP_RECENT - 1,),
+    ).fetchone()
+    if not keep_row:
+        return 0
+    keep_after_id = keep_row["id"]
+
+    # 압축 대상
+    old_entries = conn.execute(
+        "SELECT id, user_msg, alf_msg, created_at FROM history "
+        "WHERE id < ? ORDER BY id",
+        (keep_after_id,),
+    ).fetchall()
+
+    if not old_entries:
+        return 0
+
+    # 날짜별 그룹핑
+    by_date = defaultdict(list)
+    for entry in old_entries:
+        date = entry["created_at"][:10]
+        by_date[date].append(entry)
+
+    compacted = 0
+    for date, entries in sorted(by_date.items()):
+        summary = _summarize_conversations(date, entries)
+        if summary:
+            conn.execute(
+                "INSERT INTO memories (type, content, created_at) VALUES (?, ?, ?)",
+                ("episode", summary, date),
+            )
+            compacted += len(entries)
+
+    # 원본 삭제
+    conn.execute("DELETE FROM history WHERE id < ?", (keep_after_id,))
+    conn.commit()
+    print(f"[compact] {compacted}건 → {len(by_date)}개 요약으로 압축")
+    return compacted
+
+
+def _summarize_conversations(date, entries):
+    """하루치 대화를 Claude로 요약."""
+    conversation = "\n".join(
+        f"User: {e['user_msg']}\nAlf: {e['alf_msg'][:500]}"
+        for e in entries
+    )
+
+    prompt = (
+        f"다음은 {date}의 대화 기록이다. "
+        "핵심 내용만 3-5줄로 요약해라. "
+        "사용자가 언급한 사실, 선호, 결정 사항 위주로. "
+        "불필요한 인사나 형식적 대화는 생략.\n\n"
+        f"{conversation}"
+    )
+
+    try:
+        env = os.environ.copy()
+        env.pop("CLAUDECODE", None)
+        result = subprocess.run(
+            [CLAUDE_CLI, "-p", "--model", "haiku", prompt],
+            capture_output=True, text=True, timeout=30, env=env,
+        )
+        if result.returncode == 0:
+            return f"[{date} 대화 요약] {result.stdout.strip()}"
     except Exception as e:
-        print(f"[qmd] recall 실패: {e}")
-        return ""
+        print(f"[compact] 요약 실패 ({date}): {e}")
+
+    # fallback: LLM 없이 토픽만 추출
+    topics = [e["user_msg"][:60] for e in entries]
+    return f"[{date} 대화] 주제: {'; '.join(topics)}"

@@ -15,11 +15,7 @@ INLINE_MEM_PATTERN = legacy_memory.MEM_PATTERN
 
 
 def clean_and_store(response):
-    """응답에서 [MEM:*] 태그를 제거하고 메모리를 저장한다.
-
-    legacy memory.parse_and_save()를 그대로 쓰지 않고,
-    row id를 항목별로 추적해서 QMD 파일이 덮어써지지 않게 저장한다.
-    """
+    """응답에서 [MEM:*] 태그를 제거하고 메모리를 저장한다."""
     lines = response.split("\n")
     clean_lines = []
     memories = []
@@ -61,9 +57,6 @@ def clean_and_store(response):
 
     conn.commit()
     print("[tool.memory] saved " + ", ".join(f"{m['type']}:{m['content'][:20]}" for m in saved))
-
-    for item in saved:
-        legacy_memory._sync_memory_to_qmd(item["type"], item["content"], item["id"])
 
     return "\n".join(clean_lines).rstrip(), saved
 
