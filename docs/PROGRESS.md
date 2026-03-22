@@ -20,7 +20,7 @@
 ## Phase 2: 먼저 말 거는 비서
 - [x] 내장 스케줄러 구현 (at/daily/every + [SCHED:] 프로토콜)
 - [x] 세션 컨텍스트 강화 (최근 대화 히스토리 + 활성 스케줄 주입)
-- [x] QMD 시맨틱 검색 연동 (과거 대화 recall → 프롬프트 주입)
+- [x] ~~QMD 시맨틱 검색 연동~~ → 1M 컨텍스트 전체 로드 방식으로 대체 (ADR 010)
 - [x] 주식 리포트 스킬 (한투 API + 매일 21:00 리포트)
 - [x] 장 마감 리포트 스킬 (Claude Code 풀 에이전트 + Apple Notes, 매일 16:00)
 - [x] KIS 조회 전용 경로 분리 (`src/kis_readonly_client.py`, `KIS_READONLY_*`)
@@ -39,7 +39,7 @@
 - [x] GPT Codex OAuth 연동 — process_inbox.py가 GPT-5.4로 자동 처리
 - [x] 만기 스케줄 실행 경로 runtime으로 이동 (`src/runtime/scheduler_worker.py`)
 - [x] alf.py를 기본 운영 경로에서 퇴역 (`daemon_ctl.py` 기본 집합 제외)
-- [ ] alf.py(레거시) + brain.py 완전 제거
+- [x] alf.py(레거시) + brain.py 완전 제거
 - [ ] 24시간 bridge 안정성 확인
 
 ## Phase 3: 실행하는 비서
@@ -52,7 +52,8 @@
 - [x] 이벤트 버스 초안 도입 (`message.received`, `schedule.due`)
 - [x] tool layer 1차 도입 (`memory`, `schedule`, `notes`)
 - [x] KIS readonly client 도입 (`src/kis_readonly_client.py`)
-- [ ] 메모리 계층 분리 (profile/task/episodic/knowledge/schedule)
+- [x] 메모리 아키텍처 전환 — 전체 로드 + compaction (ADR 010)
+- [ ] 메모리 타입 확장 (profile/task/episodic/knowledge/schedule)
 - [ ] tool layer 확장 (`email`, `stocks`)
 - [ ] proactive notifier 도입
-- [ ] `alf.py`, `brain.py` 레거시 제거
+- [x] `alf.py`, `brain.py` 레거시 제거

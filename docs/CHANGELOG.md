@@ -1,5 +1,21 @@
 # Alf — Changelog
 
+## 2026-03-23
+
+- [feat] 이란전 일일 추적 시스템 구축 — Claude WebSearch + GPT Codex 병렬 검색, 5개 분석 축 병합 리포트
+- [feat] `skills/iran-update/` 스킬 생성 — /iran-update 로 실행, save 옵션으로 파일 저장
+- [docs] `docs/iran-war/daily/2026-03-23.md` — Day 24 기록 + 인프라 MAD 심층 분석
+- [docs] `docs/iran-war/analysis.md` — 블러핑 구조, 시간 비대칭, 인프라 MAD, 헤게모니 5대 기둥 분석 추가
+- [docs] `docs/iran-war/README.md` — 타임라인 03-23 추가
+- [config] `CLAUDE.md` — 이란전 추적 프로토콜 섹션 추가
+
+## 2026-03-19
+
+- [refactor] 메모리 시스템 대폭 단순화 — QMD 시맨틱 검색 + FTS5 제거, 1M 컨텍스트 활용 전체 로드 방식으로 전환 (ADR 010)
+- [feat] 히스토리 compaction — 500건 초과 시 오래된 대화를 Claude haiku로 날짜별 요약 압축, episode 타입 메모리로 저장
+- [feat] 시스템 프롬프트에 현재 날짜/시간 주입 — 오늘/어제 데이터 구분 불가 문제 해결
+- [feat] orchestrator allowedTools에 WebSearch 추가 — Alf 실시간 웹 검색 가능
+
 ## 2026-03-18
 
 - [refactor] `AGENTS.md` 도입 — Codex 작업 규칙, runtime 운영 기준, 문서 우선순위 정리
