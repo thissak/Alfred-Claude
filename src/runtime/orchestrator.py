@@ -168,14 +168,14 @@ def ask_claude(message, system=""):
         CLAUDE_CLI, "-p",
         "--model", MODEL,
         "--output-format", "json",
-        "--allowedTools", "mcp__fetch", "WebFetch", "WebSearch", "Read",
+        "--allowedTools", "mcp__fetch", "WebFetch", "WebSearch", "Read", "Bash",
         "--system-prompt", system,
         message,
     ]
     print(f"[brain] claude -p model={MODEL}")
 
     result = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=120, env=env,
+        cmd, capture_output=True, text=True, timeout=300, env=env,
     )
     if result.returncode != 0:
         print(f"[claude 에러] {result.stderr.strip()}")

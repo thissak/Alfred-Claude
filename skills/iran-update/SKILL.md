@@ -23,7 +23,7 @@ argument-hint: "[save]"
 
 **GPT 채널** — Bash로 codex exec 실행:
 ```
-codex exec "Give me the latest Iran war update as of {today}. Cover: 1) Military situation 2) Ceasefire/diplomacy 3) Energy markets (Brent, Hormuz) 4) Economic indicators (VIX, Asian markets). Be factual, cite sources. Search the web." 2>&1 | head -120
+/opt/homebrew/bin/codex exec "Give me the latest Iran war update as of {today}. Cover: 1) Military situation 2) Ceasefire/diplomacy 3) Energy markets (Brent, Hormuz) 4) Economic indicators (VIX, Asian markets). Be factual, cite sources. Search the web." 2>&1 | head -80
 ```
 
 ### Step 2: 병합 리포트 작성
