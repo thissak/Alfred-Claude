@@ -1,5 +1,21 @@
 # Alf — Changelog
 
+## 2026-03-27
+
+- [feat] 주식 스크리너 v2 설계 — KIS API 실제 응답 기반 TDD 구축 (`skills/stock/screener_v2/`)
+- [feat] KIS API 신규 엔드포인트 5개 allowlist 추가 — 시가총액순위, 해외조건검색, 기간별시세, 투자자매매동향, 해외현재가상세
+- [feat] 통합 스키마 정규화 모듈 — KR(inquire-price) / US(inquire-search, price-detail) API 응답을 21개 필드 통합 스키마로 변환
+- [feat] 필터 엔진 — 다중 조건 AND 조합 + 정렬/제한 + 프리셋 5종 (저평가/모멘텀/수급/대형주/성장)
+- [test] 실제 API 호출 검증 — 6개 엔드포인트 필드 구조 확인, valx 9자리 제한 등 제약사항 발견
+- [test] 단위 테스트 41개 작성 (normalize 21 + filters 20)
+
+## 2026-03-24
+
+- [fix] inbox 프로세서 중복 실행 방지 — `fcntl.flock` 기반 단일 인스턴스 잠금 추가 (`src/process_inbox.py`)
+- [refactor] 장 마감 리포트 프롬프트 구조 개선 — `-p` 하드코딩에서 `--system-prompt-file` + `watchlist.yaml` 분리 구조로 전환
+- [feat] `skills/report/watchlist.yaml` — 카테고리별 관심종목 + 분석 지시 설정 파일 신설
+- [feat] `skills/report/system.md` — 리포트 에이전트 시스템 프롬프트 분리
+
 ## 2026-03-23
 
 - [feat] 이란전 일일 추적 시스템 구축 — Claude WebSearch + GPT Codex 병렬 검색, 5개 분석 축 병합 리포트

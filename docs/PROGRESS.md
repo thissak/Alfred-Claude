@@ -23,6 +23,7 @@
 - [x] ~~QMD 시맨틱 검색 연동~~ → 1M 컨텍스트 전체 로드 방식으로 대체 (ADR 010)
 - [x] 주식 리포트 스킬 (한투 API + 매일 21:00 리포트)
 - [x] 장 마감 리포트 스킬 (Claude Code 풀 에이전트 + Apple Notes, 매일 16:00)
+- [x] 리포트 설정 분리 (system-prompt-file + watchlist.yaml 카테고리별 종목 관리)
 - [x] KIS 조회 전용 경로 분리 (`src/kis_readonly_client.py`, `KIS_READONLY_*`)
 - [x] KIS 실조회 검증 완료 (지수/국내잔고/체결/미국잔고)
 - [ ] 아침 브리핑 스케줄 등록 + 실사용 검증
@@ -40,6 +41,7 @@
 - [x] 만기 스케줄 실행 경로 runtime으로 이동 (`src/runtime/scheduler_worker.py`)
 - [x] alf.py를 기본 운영 경로에서 퇴역 (`daemon_ctl.py` 기본 집합 제외)
 - [x] alf.py(레거시) + brain.py 완전 제거
+- [x] inbox 프로세서 중복 실행 방지 (fcntl.flock 단일 인스턴스 잠금)
 - [ ] 24시간 bridge 안정성 확인
 
 ## Phase 3: 실행하는 비서
@@ -56,4 +58,15 @@
 - [ ] 메모리 타입 확장 (profile/task/episodic/knowledge/schedule)
 - [ ] tool layer 확장 (`email`, `stocks`)
 - [ ] proactive notifier 도입
+
+## Phase 5: 주식 스크리너
+- [x] KIS API 필드 조사 — 6개 엔드포인트 실제 호출 검증
+- [x] 통합 스키마 설계 (KR/US 21개 필드)
+- [x] 정규화 모듈 (`screener_v2/normalize.py`)
+- [x] 필터 엔진 + 프리셋 (`screener_v2/filters.py`)
+- [x] API 호출 모듈 (`screener_v2/kis_endpoints.py`)
+- [x] 단위 테스트 41개 통과
+- [ ] 배치 수집 스크립트 (`screener_v2/run.py`)
+- [ ] 장 마감 후 cron 연동 (KR 16:00, US 06:00)
+- [ ] 결과 출력 (data/screener.json → Vercel or Alf 연동)
 - [x] `alf.py`, `brain.py` 레거시 제거

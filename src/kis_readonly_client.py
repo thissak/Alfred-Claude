@@ -59,6 +59,27 @@ READONLY_ENDPOINTS = {
         "/uapi/domestic-stock/v1/finance/income-statement",
         "FHKST66430200",
     ),
+    # 스크리너 신규 엔드포인트
+    (
+        "/uapi/domestic-stock/v1/ranking/market-cap",
+        "FHPST01740000",
+    ),
+    (
+        "/uapi/overseas-price/v1/quotations/inquire-search",
+        "HHDFS76410000",
+    ),
+    (
+        "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+        "FHKST03010100",
+    ),
+    (
+        "/uapi/domestic-stock/v1/quotations/inquire-investor",
+        "FHKST01010900",
+    ),
+    (
+        "/uapi/overseas-price/v1/quotations/price-detail",
+        "HHDFS76200200",
+    ),
 }
 
 
