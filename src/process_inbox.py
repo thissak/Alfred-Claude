@@ -7,6 +7,8 @@ Usage:
 """
 
 import argparse
+import fcntl
+import sys
 import time
 from pathlib import Path
 
@@ -19,6 +21,19 @@ except ModuleNotFoundError:
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 INBOX = PROJECT_ROOT / "run" / "inbox"
+LOCK_FILE = PROJECT_ROOT / "run" / "inbox.lock"
+
+
+def acquire_lock():
+    """단일 인스턴스 보장. 이미 실행 중이면 즉시 종료."""
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("[inbox] 이미 다른 인스턴스가 실행 중 — 종료합니다.")
+        sys.exit(0)
+    return lock_fd
 
 
 def get_pending():
@@ -43,6 +58,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--watch", action="store_true", help="계속 감시 모드")
     args = parser.parse_args()
+
+    _lock = acquire_lock()  # noqa: F841 — held until process exits
 
     if args.watch:
         print(f"Inbox 감시 시작: {INBOX}")
