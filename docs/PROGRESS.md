@@ -66,6 +66,11 @@
 - [x] 필터 엔진 + 프리셋 (`screener_v2/filters.py`)
 - [x] API 호출 모듈 (`screener_v2/kis_endpoints.py`)
 - [x] 단위 테스트 41개 통과
+- [x] 시장 데이터 DB (`src/market_db.py`) — SQLite 7개 테이블
+- [x] 수집 데몬 (`daemons/collector_daemon.py`) — 장 마감 후 자동 수집
+- [x] 백필 스크립트 3종 (OHLCV, 재무제표, 스크리닝)
+- [x] daemon_ctl collector 등록 + launchd 앱 번들
+- [x] Trading Journal 웹앱 초기 구축 (`apps/trading-journal/`)
 - [ ] 배치 수집 스크립트 (`screener_v2/run.py`)
 - [ ] 장 마감 후 cron 연동 (KR 16:00, US 06:00)
 - [ ] 결과 출력 (data/screener.json → Vercel or Alf 연동)

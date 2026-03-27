@@ -39,6 +39,11 @@ DAEMONS = {
         "args": [],
         "desc": "네이버 이메일 IMAP",
     },
+    "collector": {
+        "script": "daemons/collector_daemon.py",
+        "args": [],
+        "desc": "주식 데이터 일일 수집",
+    },
 }
 
 ALL_DAEMONS = DAEMONS

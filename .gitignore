@@ -10,4 +10,6 @@ __pycache__/
 !/data/.gitkeep
 /run/
 /logs/
-/apps/
+/apps/com.alf.*.app/
+/apps/trading-journal/.next/
+/apps/trading-journal/node_modules/

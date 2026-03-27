@@ -2,6 +2,11 @@
 
 ## 2026-03-27
 
+- [feat] 시장 데이터 DB 신설 (`src/market_db.py`) — SQLite WAL 모드, securities/daily_prices/daily_valuations/investor_flow/financials/daily_screening/journal_trades 7개 테이블
+- [feat] 수집 데몬 (`daemons/collector_daemon.py`) — 장 마감 후 전종목 현재가·수급·스크리닝 자동 수집, 15 RPS 쓰로틀
+- [feat] 백필 스크립트 3종 — DART 재무제표(`scripts/backfill_financials.py`), PyKRX OHLCV(`scripts/backfill_ohlcv.py`), 스크리닝 지표(`scripts/compute_screening.py`)
+- [chore] daemon_ctl에 collector 데몬 등록 + apps/com.alf.collector.app 번들 추가
+- [feat] Trading Journal 웹앱 초기 구축 (`apps/trading-journal/`) — Next.js 16 + better-sqlite3 + Recharts, market.db 연동 대시보드
 - [feat] 주식 스크리너 v2 설계 — KIS API 실제 응답 기반 TDD 구축 (`skills/stock/screener_v2/`)
 - [feat] KIS API 신규 엔드포인트 5개 allowlist 추가 — 시가총액순위, 해외조건검색, 기간별시세, 투자자매매동향, 해외현재가상세
 - [feat] 통합 스키마 정규화 모듈 — KR(inquire-price) / US(inquire-search, price-detail) API 응답을 21개 필드 통합 스키마로 변환

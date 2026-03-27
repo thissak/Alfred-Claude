@@ -146,7 +146,8 @@ def get(path, tr_id, params):
         )
 
     res = requests.get(f"{BASE_URL}{path}", headers=_headers(tr_id), params=params)
-    time.sleep(0.5)
+    _throttle = float(os.environ.get("KIS_THROTTLE", "0.5"))
+    time.sleep(_throttle)
     data = res.json()
     if data.get("rt_cd") != "0":
         print(f"  [WARN] {tr_id}: {data.get('msg1', 'unknown error')}")
