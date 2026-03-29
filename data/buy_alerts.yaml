@@ -1,0 +1,10 @@
+alerts:
+- code: '234690'
+  name: 녹십자웰빙
+  price_low: 12000
+  price_high: 13000
+  reason: RSI 과매수 해소 + 눌림목 대기. 라이넥 중국 NMPA 승인 모멘텀
+  strategy: 분할매수 1차 30% (~150만원)
+  registered: '2026-03-29'
+  expires: '2026-06-30'
+  enabled: true

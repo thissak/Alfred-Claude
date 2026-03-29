@@ -8,6 +8,7 @@ __pycache__/
 /memory/
 /data/*
 !/data/.gitkeep
+!/data/buy_alerts.yaml
 /run/
 /logs/
 /apps/com.alf.*.app/

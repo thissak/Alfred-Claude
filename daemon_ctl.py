@@ -54,6 +54,11 @@ DAEMONS = {
         "args": [],
         "desc": "market.db 읽기 전용 HTTP API (port 8001)",
     },
+    "buy-alert": {
+        "script": "daemons/buy_alert_daemon.py",
+        "args": [],
+        "desc": "매수 타이밍 알림",
+    },
 }
 
 ALL_DAEMONS = DAEMONS
