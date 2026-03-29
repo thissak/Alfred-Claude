@@ -3,9 +3,11 @@
 
 수집 스케줄 (평일):
   15:45  마스터파일 갱신 → securities
+  15:45  시장 지수      → daily_indices (KOSPI/KOSDAQ/KOSPI200)
   15:50  전종목 현재가  → daily_prices + daily_valuations
   16:05  전종목 수급    → investor_flow
   16:20  스크리닝 지표  → daily_screening
+  16:30  급등 뉴스 스크리닝 → surge_alerts
 
 환경변수:
   KIS_THROTTLE=0.067   (15 RPS, 기본 0.5)
@@ -33,7 +35,11 @@ load_dotenv(os.path.join(ROOT, ".env"))
 import market_db as db
 from screener import _download_master, _parse_master
 from kis_endpoints import fetch_kr_price_detail, fetch_kr_investor
+from kis_readonly_client import get as kis_get
 from normalize import _safe_int, _safe_float
+
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+from scan_surge import scan_eod, log as surge_log
 
 POLL_INTERVAL = 30  # 초
 RETRY_DELAY = 60
@@ -75,6 +81,49 @@ def refresh_master():
         log(f"{market_upper}: {n}종목 갱신")
         total += n
     return total
+
+
+# ── 시장 지수 수집 ────────────────────────────────────
+
+INDICES = [
+    ("0001", "KOSPI"),
+    ("1001", "KOSDAQ"),
+    ("2001", "KOSPI200"),
+]
+
+
+def scan_indices(date_str=None):
+    """KOSPI/KOSDAQ/KOSPI200 지수 → daily_indices. Returns: 건수."""
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+
+    rows = []
+    for code, name in INDICES:
+        data = kis_get(
+            "/uapi/domestic-stock/v1/quotations/inquire-index-price",
+            "FHPUP02100000",
+            {"FID_COND_MRKT_DIV_CODE": "U", "FID_INPUT_ISCD": code},
+        )
+        if not data:
+            log(f"지수 {name} 수집 실패")
+            continue
+
+        o = data["output"]
+        rows.append({
+            "code": code,
+            "name": name,
+            "date": date_str,
+            "close": _safe_float(o.get("bstp_nmix_prpr")),
+            "change": _safe_float(o.get("bstp_nmix_prdy_vrss")),
+            "change_rate": _safe_float(o.get("bstp_nmix_prdy_ctrt")),
+            "volume": _safe_int(o.get("acml_vol")),
+            "trade_value": _safe_int(o.get("acml_tr_pbmn")),
+        })
+
+    if rows:
+        n = db.upsert_daily_indices(rows)
+        log(f"지수 완료: {n}건 ({', '.join(r['name'] for r in rows)})")
+    return len(rows)
 
 
 # ── 전종목 현재가 수집 ──────────────────────────────────
@@ -270,6 +319,19 @@ def compute_screening(date_str=None):
     return len(rows)
 
 
+# ── 급등 뉴스 스크리닝 ──────────────────────────────────
+
+def scan_surge_alerts(date_str=None):
+    """급등 종목 추출 + 뉴스 조회 → surge_alerts."""
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+    try:
+        alerts = scan_eod(date_str, min_return=5.0, min_vol_ratio=1.5)
+        log(f"급등 스크리닝 완료: {len(alerts)}건")
+    except Exception as e:
+        log(f"급등 스크리닝 실패: {e}")
+
+
 # ── 일일 수집 오케스트레이션 ────────────────────────────
 
 def run_daily_collection():
@@ -280,9 +342,11 @@ def run_daily_collection():
     t0 = time.time()
 
     refresh_master()
+    scan_indices(date_str)
     scan_prices(date_str)
     scan_investor_flow()
     compute_screening(date_str)
+    scan_surge_alerts(date_str)
 
     elapsed = time.time() - t0
     log(f"=== 일일 수집 완료 ({elapsed:.0f}초) ===")

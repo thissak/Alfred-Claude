@@ -80,6 +80,41 @@ READONLY_ENDPOINTS = {
         "/uapi/overseas-price/v1/quotations/price-detail",
         "HHDFS76200200",
     ),
+    # 재무 API 추가
+    (
+        "/uapi/domestic-stock/v1/finance/balance-sheet",
+        "FHKST66430100",
+    ),
+    (
+        "/uapi/domestic-stock/v1/finance/financial-ratio",
+        "FHKST66430300",
+    ),
+    (
+        "/uapi/domestic-stock/v1/finance/profit-ratio",
+        "FHKST66430400",
+    ),
+    (
+        "/uapi/domestic-stock/v1/finance/other-major-ratios",
+        "FHKST66430500",
+    ),
+    (
+        "/uapi/domestic-stock/v1/finance/stability-ratio",
+        "FHKST66430600",
+    ),
+    (
+        "/uapi/domestic-stock/v1/finance/growth-ratio",
+        "FHKST66430800",
+    ),
+    # 공매도
+    (
+        "/uapi/domestic-stock/v1/quotations/daily-short-sale",
+        "FHPST04830000",
+    ),
+    # 뉴스
+    (
+        "/uapi/domestic-stock/v1/quotations/news-title",
+        "FHKST01011800",
+    ),
 }
 
 

@@ -1,7 +1,8 @@
 """시장 데이터 DB — SQLite 기반 전 종목 시계열 저장.
 
 테이블: securities, daily_prices, daily_valuations, investor_flow,
-       financials, daily_screening, journal_trades
+       financials, daily_screening, journal_trades, daily_indices,
+       daily_short_selling, surge_alerts
 """
 
 import os
@@ -98,12 +99,40 @@ CREATE TABLE IF NOT EXISTS financials (
     code TEXT NOT NULL,
     period TEXT NOT NULL,             -- 'YYYY' or 'YYYYQN'
     period_type TEXT NOT NULL,        -- 'annual' / 'quarterly'
+    -- 손익계산서 (FHKST66430200)
     revenue INTEGER,                  -- 억원
     oper_profit INTEGER,
     net_profit INTEGER,
+    -- 재무비율 (FHKST66430300)
     roe REAL,
+    eps REAL,
+    bps REAL,
+    -- 대차대조표 (FHKST66430100)
+    total_asset INTEGER,              -- 자산총계 (억원)
+    total_liability INTEGER,          -- 부채총계
+    total_equity INTEGER,             -- 자본총계
+    -- 안정성비율 (FHKST66430600)
+    debt_ratio REAL,                  -- 부채비율 %
+    current_ratio REAL,               -- 유동비율 %
+    -- 성장성비율 (FHKST66430800)
+    revenue_growth REAL,              -- 매출액증가율 %
+    oper_profit_growth REAL,          -- 영업이익증가율 %
+    -- 기타주요비율 (FHKST66430500)
+    ebitda INTEGER,                   -- EBITDA (억원)
+    ev_ebitda REAL,                   -- EV/EBITDA
+    payout_rate REAL,                 -- 배당성향 %
     updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     PRIMARY KEY (code, period)
+);
+
+-- 일별 공매도
+CREATE TABLE IF NOT EXISTS daily_short_selling (
+    code TEXT NOT NULL,
+    date TEXT NOT NULL,
+    short_volume INTEGER,             -- 공매도 체결수량
+    short_value INTEGER,              -- 공매도 거래대금
+    short_ratio REAL,                 -- 공매도 비중 %
+    PRIMARY KEY (code, date)
 );
 
 -- 사전계산 스크리닝 지표
@@ -149,10 +178,42 @@ CREATE TABLE IF NOT EXISTS journal_trades (
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
+-- 시장 지수 일별
+CREATE TABLE IF NOT EXISTS daily_indices (
+    code TEXT NOT NULL,              -- '0001'=KOSPI, '1001'=KOSDAQ, '2001'=KOSPI200
+    name TEXT NOT NULL,
+    date TEXT NOT NULL,
+    close REAL NOT NULL,             -- 지수 종가
+    change REAL,                     -- 전일 대비
+    change_rate REAL,                -- 등락률 %
+    volume INTEGER,                  -- 거래량
+    trade_value INTEGER,             -- 거래대금
+    PRIMARY KEY (code, date)
+);
+
+-- 급등 뉴스 알림
+CREATE TABLE IF NOT EXISTS surge_alerts (
+    code TEXT NOT NULL,
+    date TEXT NOT NULL,
+    close INTEGER,
+    return_1d REAL,
+    volume_ratio REAL,
+    mktcap INTEGER,
+    foreign_net_5d INTEGER,
+    news_title TEXT,
+    news_source TEXT,
+    news_time TEXT,                   -- HH:MM:SS
+    detected_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    PRIMARY KEY (code, date)
+);
+
 -- 인덱스
+CREATE INDEX IF NOT EXISTS idx_surge_date ON surge_alerts(date);
+CREATE INDEX IF NOT EXISTS idx_indices_date ON daily_indices(date);
 CREATE INDEX IF NOT EXISTS idx_prices_date ON daily_prices(date);
 CREATE INDEX IF NOT EXISTS idx_valuations_date ON daily_valuations(date);
 CREATE INDEX IF NOT EXISTS idx_flow_date ON investor_flow(date);
+CREATE INDEX IF NOT EXISTS idx_short_date ON daily_short_selling(date);
 CREATE INDEX IF NOT EXISTS idx_screening_date ON daily_screening(date);
 CREATE INDEX IF NOT EXISTS idx_screening_date_per ON daily_screening(date, per);
 CREATE INDEX IF NOT EXISTS idx_screening_date_mktcap ON daily_screening(date, mktcap DESC);
@@ -207,6 +268,47 @@ def get_all_codes(market=None):
         sql += " AND market=?"
         params.append(market)
     return [r["code"] for r in conn.execute(sql, params).fetchall()]
+
+
+# ── Daily Indices ──────────────────────────────────────
+
+def upsert_daily_indices(rows):
+    """시장 지수 upsert. Returns: 건수."""
+    conn = _get_conn()
+    conn.executemany(
+        """INSERT INTO daily_indices (code, name, date, close, change, change_rate,
+               volume, trade_value)
+           VALUES (:code, :name, :date, :close, :change, :change_rate,
+               :volume, :trade_value)
+           ON CONFLICT(code, date) DO UPDATE SET
+               name=excluded.name, close=excluded.close,
+               change=excluded.change, change_rate=excluded.change_rate,
+               volume=excluded.volume, trade_value=excluded.trade_value""",
+        rows,
+    )
+    conn.commit()
+    return len(rows)
+
+
+def get_daily_indices(code=None, start=None, end=None, limit=None):
+    """시장 지수 조회."""
+    conn = _get_conn()
+    sql = "SELECT * FROM daily_indices WHERE 1=1"
+    params = []
+    if code:
+        sql += " AND code=?"
+        params.append(code)
+    if start:
+        sql += " AND date>=?"
+        params.append(start)
+    if end:
+        sql += " AND date<=?"
+        params.append(end)
+    sql += " ORDER BY date DESC"
+    if limit:
+        sql += " LIMIT ?"
+        params.append(limit)
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
 # ── Daily Prices ────────────────────────────────────────
@@ -316,13 +418,52 @@ def upsert_financials(rows):
     conn = _get_conn()
     conn.executemany(
         """INSERT INTO financials
-           (code, period, period_type, revenue, oper_profit, net_profit, roe, updated_at)
+           (code, period, period_type, revenue, oper_profit, net_profit, roe,
+            eps, bps, total_asset, total_liability, total_equity,
+            debt_ratio, current_ratio, revenue_growth, oper_profit_growth,
+            ebitda, ev_ebitda, payout_rate, updated_at)
            VALUES (:code, :period, :period_type, :revenue, :oper_profit,
-                   :net_profit, :roe, datetime('now','localtime'))
+                   :net_profit, :roe, :eps, :bps,
+                   :total_asset, :total_liability, :total_equity,
+                   :debt_ratio, :current_ratio, :revenue_growth, :oper_profit_growth,
+                   :ebitda, :ev_ebitda, :payout_rate,
+                   datetime('now','localtime'))
            ON CONFLICT(code, period) DO UPDATE SET
-               revenue=excluded.revenue, oper_profit=excluded.oper_profit,
-               net_profit=excluded.net_profit, roe=excluded.roe,
+               revenue=COALESCE(excluded.revenue, financials.revenue),
+               oper_profit=COALESCE(excluded.oper_profit, financials.oper_profit),
+               net_profit=COALESCE(excluded.net_profit, financials.net_profit),
+               roe=COALESCE(excluded.roe, financials.roe),
+               eps=COALESCE(excluded.eps, financials.eps),
+               bps=COALESCE(excluded.bps, financials.bps),
+               total_asset=COALESCE(excluded.total_asset, financials.total_asset),
+               total_liability=COALESCE(excluded.total_liability, financials.total_liability),
+               total_equity=COALESCE(excluded.total_equity, financials.total_equity),
+               debt_ratio=COALESCE(excluded.debt_ratio, financials.debt_ratio),
+               current_ratio=COALESCE(excluded.current_ratio, financials.current_ratio),
+               revenue_growth=COALESCE(excluded.revenue_growth, financials.revenue_growth),
+               oper_profit_growth=COALESCE(excluded.oper_profit_growth, financials.oper_profit_growth),
+               ebitda=COALESCE(excluded.ebitda, financials.ebitda),
+               ev_ebitda=COALESCE(excluded.ev_ebitda, financials.ev_ebitda),
+               payout_rate=COALESCE(excluded.payout_rate, financials.payout_rate),
                updated_at=datetime('now','localtime')""",
+        rows,
+    )
+    conn.commit()
+    return len(rows)
+
+
+# ── Daily Short Selling ─────────────────────────────────
+
+def upsert_daily_short_selling(rows):
+    """공매도 upsert. Returns: 건수."""
+    conn = _get_conn()
+    conn.executemany(
+        """INSERT INTO daily_short_selling
+           (code, date, short_volume, short_value, short_ratio)
+           VALUES (:code, :date, :short_volume, :short_value, :short_ratio)
+           ON CONFLICT(code, date) DO UPDATE SET
+               short_volume=excluded.short_volume, short_value=excluded.short_value,
+               short_ratio=excluded.short_ratio""",
         rows,
     )
     conn.commit()
@@ -438,6 +579,48 @@ def get_trades(code=None, start=None, end=None, limit=100):
         sql += " AND traded_at<=?"
         params.append(end)
     sql += " ORDER BY traded_at DESC, id DESC LIMIT ?"
+    params.append(limit)
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+# ── Surge Alerts ───────────────────────────────────────
+
+def upsert_surge_alerts(rows):
+    """급등 알림 upsert. Returns: 건수."""
+    conn = _get_conn()
+    conn.executemany(
+        """INSERT INTO surge_alerts
+           (code, date, close, return_1d, volume_ratio, mktcap,
+            foreign_net_5d, news_title, news_source, news_time)
+           VALUES (:code, :date, :close, :return_1d, :volume_ratio, :mktcap,
+                   :foreign_net_5d, :news_title, :news_source, :news_time)
+           ON CONFLICT(code, date) DO UPDATE SET
+               close=excluded.close, return_1d=excluded.return_1d,
+               volume_ratio=excluded.volume_ratio, mktcap=excluded.mktcap,
+               foreign_net_5d=excluded.foreign_net_5d,
+               news_title=excluded.news_title, news_source=excluded.news_source,
+               news_time=excluded.news_time,
+               detected_at=datetime('now','localtime')""",
+        rows,
+    )
+    conn.commit()
+    return len(rows)
+
+
+def get_surge_alerts(date=None, min_return=5.0, limit=50):
+    """급등 알림 조회."""
+    conn = _get_conn()
+    sql = """SELECT sa.*, s.name, s.market, s.sector
+             FROM surge_alerts sa
+             JOIN securities s ON s.code = sa.code
+             WHERE 1=1"""
+    params = []
+    if date:
+        sql += " AND sa.date = ?"
+        params.append(date)
+    sql += " AND sa.return_1d >= ?"
+    params.append(min_return)
+    sql += " ORDER BY sa.return_1d DESC LIMIT ?"
     params.append(limit)
     return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
