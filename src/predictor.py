@@ -1,7 +1,7 @@
-"""predictor.py — 급등 후 눌림목 예측 스코어링 (v3).
+"""predictor.py — 급등 후 눌림목 예측 스코어링 (v4).
 
 4대 축: 기술적(25) + 재료소화(30) + 수급(25) + 펀더멘탈(20) = 100점
-백테스트 적중률: 75점+ → 73.1%, TOP10 → 9/10
+v4 추가: 거래량 선행 시그널 감점, 밸류트랩 감점
 """
 
 import json
@@ -155,7 +155,11 @@ def score_stock(code, date):
     elif sr >= 20:
         catalyst -= 5
     if nc == 0:
-        catalyst += 5
+        # v4: 뉴스 0건 + 급등 = 거래량 선행 (재료 불명 = 리스크)
+        if sr >= 10:
+            catalyst -= 5  # 재료 없이 급등 → 감점
+        else:
+            catalyst += 5
     elif 1 <= nc <= 3:
         catalyst += 7
     elif 4 <= nc <= 8:
@@ -201,6 +205,23 @@ def score_stock(code, date):
         fundamental += 1
     elif per > 100:
         fundamental -= 2
+
+    # v4: 밸류트랩 감점 — 저PER인데 영업이익 감소 추세
+    if fi:
+        op_growth = fi.get("oper_profit_growth")
+        if op_growth is not None and op_growth < -10 and per and 0 < per < 10:
+            fundamental -= 5  # 저PER + 이익감소 = 밸류트랩
+        # 영업이익 연속 감소 추가 체크
+        fins_hist = db._query(
+            "SELECT oper_profit_growth FROM financials WHERE code=? "
+            "AND period_type='quarterly' ORDER BY period DESC LIMIT 3", [code]
+        )
+        declining = sum(1 for f2 in fins_hist
+                        if f2.get("oper_profit_growth") is not None
+                        and f2["oper_profit_growth"] < 0)
+        if declining >= 2:
+            fundamental -= 3  # 2분기 이상 연속 감소
+
     fundamental = max(0, min(20, fundamental))
 
     total = tech + catalyst + supply + fundamental
