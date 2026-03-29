@@ -8,6 +8,7 @@
   16:05  전종목 수급    → investor_flow
   16:20  스크리닝 지표  → daily_screening
   16:30  급등 뉴스 스크리닝 → surge_alerts
+  16:35  관심종목+급등종목 뉴스 → news
 
 환경변수:
   KIS_THROTTLE=0.067   (15 RPS, 기본 0.5)
@@ -332,6 +333,92 @@ def scan_surge_alerts(date_str=None):
         log(f"급등 스크리닝 실패: {e}")
 
 
+# ── 뉴스 수집 ──────────────────────────────────────────
+
+def scan_news(date_str=None):
+    """관심종목 + 당일 급등종목 뉴스 수집 → news 테이블. Returns: 건수."""
+    import json
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+    date_raw = date_str.replace("-", "")
+
+    # 관심종목 로드
+    config_path = os.path.join(ROOT, "skills", "stock", "config.json")
+    codes = set()
+    try:
+        with open(config_path) as f:
+            config = json.load(f)
+        for cat in config.get("watchlist", {}).values():
+            if isinstance(cat, list):
+                for item in cat:
+                    if isinstance(item, dict):
+                        codes.add(item.get("code", ""))
+                    elif isinstance(item, str):
+                        codes.add(item)
+    except Exception:
+        pass
+
+    # 당일 급등종목 추가
+    try:
+        alerts = db.get_surge_alerts(date=date_str, min_return=5.0, limit=50)
+        for a in alerts:
+            codes.add(a["code"])
+    except Exception:
+        pass
+
+    codes.discard("")
+    log(f"뉴스 수집 시작: {len(codes)}종목")
+
+    skip_keywords = ["상위 50종목", "상위 20종목", "신고가 종목", "신저가 종목"]
+    all_rows = []
+    for code in codes:
+        try:
+            res = kis_get(
+                "/uapi/domestic-stock/v1/quotations/news-title",
+                "FHKST01011800",
+                {
+                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_INPUT_ISCD": code,
+                    "FID_INPUT_DATE_1": date_raw,
+                    "FID_INPUT_DATE_2": date_raw,
+                    "FID_TITL_CNTT": "",
+                    "FID_NEWS_OFER_ENTP_CODE": "",
+                    "FID_COND_MRKT_CLS_CODE": "",
+                    "FID_INPUT_HOUR_1": "",
+                    "FID_RANK_SORT_CLS_CODE": "0",
+                    "FID_INPUT_SRNO": "",
+                },
+            )
+            if not res:
+                continue
+            for item in res.get("output") or []:
+                title = item.get("hts_pbnt_titl_cntt", "")
+                if not title or any(kw in title for kw in skip_keywords):
+                    continue
+                dt = item.get("data_dt", "")
+                if len(dt) == 8:
+                    dt = f"{dt[:4]}-{dt[4:6]}-{dt[6:8]}"
+                tm = item.get("data_tm", "")
+                if len(tm) == 6:
+                    tm = f"{tm[:2]}:{tm[2:4]}:{tm[4:6]}"
+                all_rows.append({
+                    "code": code,
+                    "date": dt,
+                    "time": tm,
+                    "title": title,
+                    "source": item.get("dorg", ""),
+                })
+        except Exception:
+            continue
+
+    if all_rows:
+        n = db.upsert_news(all_rows)
+        log(f"뉴스 완료: {n}건 ({len(codes)}종목)")
+    else:
+        log("뉴스: 데이터 없음")
+    return len(all_rows)
+
+
 # ── 일일 수집 오케스트레이션 ────────────────────────────
 
 def run_daily_collection():
@@ -347,6 +434,7 @@ def run_daily_collection():
     scan_investor_flow()
     compute_screening(date_str)
     scan_surge_alerts(date_str)
+    scan_news(date_str)
 
     elapsed = time.time() - t0
     log(f"=== 일일 수집 완료 ({elapsed:.0f}초) ===")

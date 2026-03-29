@@ -226,7 +226,19 @@ CREATE TABLE IF NOT EXISTS surge_alerts (
     PRIMARY KEY (code, date)
 );
 
+-- 뉴스
+CREATE TABLE IF NOT EXISTS news (
+    code TEXT NOT NULL,
+    date TEXT NOT NULL,
+    time TEXT NOT NULL,
+    title TEXT NOT NULL,
+    source TEXT,
+    collected_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE (code, date, time, title)
+);
+
 -- 인덱스
+CREATE INDEX IF NOT EXISTS idx_news_code_date ON news(code, date);
 CREATE INDEX IF NOT EXISTS idx_surge_date ON surge_alerts(date);
 CREATE INDEX IF NOT EXISTS idx_indices_date ON daily_indices(date);
 CREATE INDEX IF NOT EXISTS idx_prices_date ON daily_prices(date);
@@ -632,6 +644,41 @@ def get_surge_alerts(date=None, min_return=5.0, limit=50):
     sql += " AND sa.return_1d >= ?"
     params.append(min_return)
     sql += " ORDER BY sa.return_1d DESC LIMIT ?"
+    params.append(limit)
+    return _query(sql, params)
+
+
+# ── News ───────────────────────────────────────────────
+
+def upsert_news(rows):
+    """뉴스 upsert (INSERT OR IGNORE). Returns: 건수."""
+    conn = _get_conn()
+    conn.executemany(
+        """INSERT OR IGNORE INTO news (code, date, time, title, source)
+           VALUES (:code, :date, :time, :title, :source)""",
+        rows,
+    )
+    conn.commit()
+    return len(rows)
+
+
+def get_news(code=None, date=None, start=None, end=None, limit=50):
+    """뉴스 조회."""
+    sql = "SELECT * FROM news WHERE 1=1"
+    params = []
+    if code:
+        sql += " AND code=?"
+        params.append(code)
+    if date:
+        sql += " AND date=?"
+        params.append(date)
+    if start:
+        sql += " AND date>=?"
+        params.append(start)
+    if end:
+        sql += " AND date<=?"
+        params.append(end)
+    sql += " ORDER BY date DESC, time DESC LIMIT ?"
     params.append(limit)
     return _query(sql, params)
 

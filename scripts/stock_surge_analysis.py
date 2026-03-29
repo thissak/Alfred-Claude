@@ -121,7 +121,8 @@ def fetch_investor(code: str) -> dict:
 def fetch_news(code: str, date_from: str, date_to: str) -> list[dict]:
     """종목 뉴스 조회."""
     if _USE_MARKET_DB:
-        return []  # 원격 DB에 뉴스 없음 — KIS API 전용
+        rows = _query(f"SELECT date, time, title, source FROM news WHERE code='{code}' AND date BETWEEN '{date_from}' AND '{date_to}' ORDER BY date, time")
+        return rows
     res = get(
         "/uapi/domestic-stock/v1/quotations/news-title",
         "FHKST01011800",
