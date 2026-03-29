@@ -33,6 +33,11 @@ src/runtime/scheduler_worker.py
 -> src/alf_bridge.py
 ```
 
+## 인프라 분리
+
+- 맥미니 = 서버 (데몬 + 수집 + iMessage), 맥프로 = 분석 워크스테이션
+- 상세: `docs/infra-split.md`
+
 ## Notes
 
 - 기억: `src/memory.py`
