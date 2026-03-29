@@ -66,11 +66,18 @@
 - [x] 필터 엔진 + 프리셋 (`screener_v2/filters.py`)
 - [x] API 호출 모듈 (`screener_v2/kis_endpoints.py`)
 - [x] 단위 테스트 41개 통과
-- [x] 시장 데이터 DB (`src/market_db.py`) — SQLite 7개 테이블
-- [x] 수집 데몬 (`daemons/collector_daemon.py`) — 장 마감 후 자동 수집
-- [x] 백필 스크립트 3종 (OHLCV, 재무제표, 스크리닝)
+- [x] 시장 데이터 DB (`src/market_db.py`) — SQLite 9개 테이블 (daily_indices, daily_short_selling 추가)
+- [x] 수집 데몬 (`daemons/collector_daemon.py`) — 장 마감 후 자동 수집 + 지수 수집 통합
+- [x] 백필 스크립트 6종 (OHLCV, 지수, 재무제표 KIS, 추가재무+공매도, PER/PBR 역산, 스크리닝)
+- [x] KIS 재무 API 7개 화이트리스트 + 공매도 API
+- [x] 전종목 재무제표 수집 — 손익/재무비율/대차대조표/안정성/성장성/기타비율 (20+ years)
+- [x] PER/PBR 5년 히스토리 역산 (274만건)
+- [x] KIS API 전체 카탈로그 문서화 (352개 엔드포인트)
 - [x] daemon_ctl collector 등록 + launchd 앱 번들
 - [x] Trading Journal 웹앱 초기 구축 (`apps/trading-journal/`)
+- [x] surge 스킬 — 일봉 이상패턴 + 뉴스·수급 연동 분석 + 차트 + 노션 저장
+- [x] KIS 뉴스 API 연동 (FHKST01011800)
+- [ ] 매일 리포트에 급등락 스크리닝 통합
 - [ ] 배치 수집 스크립트 (`screener_v2/run.py`)
 - [ ] 장 마감 후 cron 연동 (KR 16:00, US 06:00)
 - [ ] 결과 출력 (data/screener.json → Vercel or Alf 연동)

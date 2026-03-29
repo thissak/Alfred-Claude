@@ -1,5 +1,24 @@
 # Alf — Changelog
 
+## 2026-03-28
+
+- [feat] surge 스킬 신설 (`.claude/skills/surge/`) — 종목 일봉 이상패턴 자동 탐지 + 뉴스·수급 매칭 + 캔들차트 생성 + 노션 자동 저장
+- [feat] `scripts/stock_surge_analysis.py` — 일봉 패턴 탐지(급등/급락/거래량/갭/장대봉/꼬리봉) + KIS 뉴스·투자자 API 연동
+- [feat] `scripts/stock_surge_chart.py` — mplfinance 캔들차트 + 이상패턴 마킹 + 주석 자동 생성
+- [feat] KIS 뉴스 API 화이트리스트 추가 (FHKST01011800, news-title)
+- [docs] 이란전 Day 29 업데이트 — 후티 첫 참전, 트럼프 데드라인 4/6 재연장, 걸프 민간인프라 피격
+- [docs] 이란전 analysis.md 대규모 업데이트 — 삼각→사각 교착, 시나리오 확률 재조정, 경제지표 추가
+- [feat] daily_indices 테이블 신설 + 데몬 통합 — KOSPI/KOSDAQ/KOSPI200 지수 자동 수집
+- [feat] 지수 5년 백필 (`scripts/backfill_indices.py`) — 네이버 금융 API 기반 3,618건
+- [feat] KIS 재무 API 6개 화이트리스트 추가 — 대차대조표/재무비율/수익성/안정성/성장성/기타주요비율
+- [feat] KIS 재무제표 백필 (`scripts/backfill_financials_kis.py`) — 손익+재무비율(EPS/BPS/ROE) 전종목 11.3만건
+- [feat] PER/PBR 역산 (`scripts/compute_valuations.py`) — EPS+종가로 daily_valuations 5년 274만건 생성
+- [feat] financials 테이블 확장 — 대차대조표(자산/부채/자본), 안정성(부채비율/유동비율), 성장성(매출/영업익 증가율), 기타(EBITDA/EV·EBITDA/배당성향) 10개 컬럼 추가
+- [feat] daily_short_selling 테이블 신설 + 공매도 백필 (`scripts/backfill_extra.py`) — 1년치 종목별 공매도 체결량/비중
+- [feat] 공매도 API 화이트리스트 추가 (FHPST04830000, daily-short-sale)
+- [docs] KIS API 전체 카탈로그 (`docs/kis-api-endpoints.md`) — 352개 엔드포인트 조사 정리
+- [chore] PyKRX 펀더멘탈 API 장애 발견 — KIS API 직접 백필로 우회
+
 ## 2026-03-27
 
 - [feat] 시장 데이터 DB 신설 (`src/market_db.py`) — SQLite WAL 모드, securities/daily_prices/daily_valuations/investor_flow/financials/daily_screening/journal_trades 7개 테이블
