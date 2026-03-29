@@ -44,6 +44,16 @@ DAEMONS = {
         "args": [],
         "desc": "주식 데이터 일일 수집",
     },
+    "trump": {
+        "script": "daemons/trump_monitor.py",
+        "args": [],
+        "desc": "트럼프 Truth Social RSS 모니터",
+    },
+    "market-api": {
+        "script": "daemons/market_api.py",
+        "args": [],
+        "desc": "market.db 읽기 전용 HTTP API (port 8001)",
+    },
 }
 
 ALL_DAEMONS = DAEMONS

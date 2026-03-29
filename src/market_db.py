@@ -5,12 +5,17 @@
        daily_short_selling, surge_alerts
 """
 
+import json
 import os
 import sqlite3
 from datetime import datetime
+from urllib.request import urlopen, Request
 
 _DB_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 DB_PATH = os.path.join(_DB_DIR, "market.db")
+
+# 환경변수 MARKET_DB_HOST 설정 시 원격 API 모드 (예: "Ai-Mac-mini.local:8001")
+_REMOTE_HOST = os.environ.get("MARKET_DB_HOST")
 
 _conn = None
 
@@ -24,6 +29,20 @@ def _get_conn():
         _conn.execute("PRAGMA journal_mode=WAL")
         _conn.execute("PRAGMA foreign_keys=ON")
     return _conn
+
+
+def _query(sql, params=None):
+    """SELECT 실행. 로컬이면 SQLite 직접, 원격이면 HTTP API 경유."""
+    if _REMOTE_HOST:
+        req = Request(
+            f"http://{_REMOTE_HOST}/query",
+            data=json.dumps({"sql": sql, "params": params or []}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())
+    conn = _get_conn()
+    return [dict(r) for r in conn.execute(sql, params or []).fetchall()]
 
 
 def init(db_path=None):
@@ -247,7 +266,6 @@ def upsert_securities(rows):
 
 def get_active_codes(market=None):
     """활성 종목 코드 목록 (ETP/SPAC/관리/거래정지 제외)."""
-    conn = _get_conn()
     sql = """SELECT code FROM securities
              WHERE is_etp=0 AND is_spac=0 AND is_halt=0 AND is_admin=0
                AND delisted_at IS NULL"""
@@ -256,18 +274,17 @@ def get_active_codes(market=None):
         sql += " AND market=?"
         params.append(market)
     sql += " ORDER BY mktcap DESC"
-    return [r["code"] for r in conn.execute(sql, params).fetchall()]
+    return [r["code"] for r in _query(sql, params)]
 
 
 def get_all_codes(market=None):
     """전체 종목 코드 목록."""
-    conn = _get_conn()
     sql = "SELECT code FROM securities WHERE delisted_at IS NULL"
     params = []
     if market:
         sql += " AND market=?"
         params.append(market)
-    return [r["code"] for r in conn.execute(sql, params).fetchall()]
+    return [r["code"] for r in _query(sql, params)]
 
 
 # ── Daily Indices ──────────────────────────────────────
@@ -292,7 +309,6 @@ def upsert_daily_indices(rows):
 
 def get_daily_indices(code=None, start=None, end=None, limit=None):
     """시장 지수 조회."""
-    conn = _get_conn()
     sql = "SELECT * FROM daily_indices WHERE 1=1"
     params = []
     if code:
@@ -308,7 +324,7 @@ def get_daily_indices(code=None, start=None, end=None, limit=None):
     if limit:
         sql += " LIMIT ?"
         params.append(limit)
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return _query(sql, params)
 
 
 # ── Daily Prices ────────────────────────────────────────
@@ -348,7 +364,6 @@ def upsert_daily_prices(rows):
 
 def get_daily_prices(code, start=None, end=None, limit=None):
     """종목 일별 시세 조회."""
-    conn = _get_conn()
     sql = "SELECT * FROM daily_prices WHERE code=?"
     params = [code]
     if start:
@@ -361,7 +376,7 @@ def get_daily_prices(code, start=None, end=None, limit=None):
     if limit:
         sql += " LIMIT ?"
         params.append(limit)
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return _query(sql, params)
 
 
 # ── Daily Valuations ────────────────────────────────────
@@ -398,7 +413,6 @@ def insert_investor_flow(rows):
 
 def get_investor_flow(code, start=None, end=None):
     """종목 투자자 수급 조회."""
-    conn = _get_conn()
     sql = "SELECT * FROM investor_flow WHERE code=?"
     params = [code]
     if start:
@@ -408,7 +422,7 @@ def get_investor_flow(code, start=None, end=None):
         sql += " AND date<=?"
         params.append(end)
     sql += " ORDER BY date DESC"
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return _query(sql, params)
 
 
 # ── Financials ──────────────────────────────────────────
@@ -509,7 +523,6 @@ def get_screening(date, filters=None, sort_by="mktcap", ascending=False, limit=5
 
     filters: dict of {field: (op, value)} e.g. {"per": ("between", (3, 10))}
     """
-    conn = _get_conn()
     sql = """SELECT ds.*, s.name, s.market, s.sector
              FROM daily_screening ds
              JOIN securities s ON s.code = ds.code
@@ -530,7 +543,7 @@ def get_screening(date, filters=None, sort_by="mktcap", ascending=False, limit=5
     sql += f" ORDER BY ds.{sort_by} {order} LIMIT ?"
     params.append(limit)
 
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return _query(sql, params)
 
 
 # ── Journal ─────────────────────────────────────────────
@@ -566,7 +579,6 @@ def add_trade(trade):
 
 def get_trades(code=None, start=None, end=None, limit=100):
     """매매일지 조회."""
-    conn = _get_conn()
     sql = "SELECT * FROM journal_trades WHERE 1=1"
     params = []
     if code:
@@ -580,7 +592,7 @@ def get_trades(code=None, start=None, end=None, limit=100):
         params.append(end)
     sql += " ORDER BY traded_at DESC, id DESC LIMIT ?"
     params.append(limit)
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return _query(sql, params)
 
 
 # ── Surge Alerts ───────────────────────────────────────
@@ -609,7 +621,6 @@ def upsert_surge_alerts(rows):
 
 def get_surge_alerts(date=None, min_return=5.0, limit=50):
     """급등 알림 조회."""
-    conn = _get_conn()
     sql = """SELECT sa.*, s.name, s.market, s.sector
              FROM surge_alerts sa
              JOIN securities s ON s.code = sa.code
@@ -622,19 +633,18 @@ def get_surge_alerts(date=None, min_return=5.0, limit=50):
     params.append(min_return)
     sql += " ORDER BY sa.return_1d DESC LIMIT ?"
     params.append(limit)
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return _query(sql, params)
 
 
 # ── Utility ─────────────────────────────────────────────
 
 def get_latest_date(table="daily_prices"):
     """테이블의 최신 날짜 조회."""
-    conn = _get_conn()
-    row = conn.execute(f"SELECT MAX(date) as d FROM {table}").fetchone()
-    return row["d"] if row else None
+    rows = _query(f"SELECT MAX(date) as d FROM {table}")
+    return rows[0]["d"] if rows else None
 
 
 def count(table):
     """테이블 행 수."""
-    conn = _get_conn()
-    return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+    rows = _query(f"SELECT COUNT(*) as cnt FROM {table}")
+    return rows[0]["cnt"] if rows else 0

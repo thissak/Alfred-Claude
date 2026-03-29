@@ -1,5 +1,12 @@
 # Alf — Changelog
 
+## 2026-03-29
+
+- [feat] market-api 데몬 신설 (`daemons/market_api.py`) — market.db 읽기 전용 HTTP SQL 프록시 (port 8001)
+- [feat] `src/market_db.py` 원격 모드 추가 — `MARKET_DB_HOST` 환경변수로 맥프로에서 맥미니 DB 원격 조회
+- [feat] `daemon_ctl.py`에 market-api 데몬 등록
+- [docs] 인프라 분리 문서 업데이트 — rsync → Market API 방식으로 전환
+
 ## 2026-03-28
 
 - [feat] surge 스킬 신설 (`.claude/skills/surge/`) — 종목 일봉 이상패턴 자동 탐지 + 뉴스·수급 매칭 + 캔들차트 생성 + 노션 자동 저장
