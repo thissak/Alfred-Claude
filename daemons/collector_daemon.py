@@ -348,13 +348,17 @@ def scan_news(date_str=None):
     try:
         with open(config_path) as f:
             config = json.load(f)
-        for cat in config.get("watchlist", {}).values():
-            if isinstance(cat, list):
-                for item in cat:
-                    if isinstance(item, dict):
-                        codes.add(item.get("code", ""))
-                    elif isinstance(item, str):
-                        codes.add(item)
+        wl = config.get("watchlist", [])
+        if isinstance(wl, list):
+            for item in wl:
+                if isinstance(item, dict):
+                    codes.add(item.get("code", ""))
+        elif isinstance(wl, dict):
+            for cat in wl.values():
+                if isinstance(cat, list):
+                    for item in cat:
+                        if isinstance(item, dict):
+                            codes.add(item.get("code", ""))
     except Exception:
         pass
 
