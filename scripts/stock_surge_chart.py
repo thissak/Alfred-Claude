@@ -1,5 +1,6 @@
 """종목 일봉 캔들차트 + 이상패턴 마킹."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -13,7 +14,12 @@ import mplfinance as mpf
 import pandas as pd
 from datetime import datetime
 
-from src.kis_readonly_client import get
+_USE_MARKET_DB = bool(os.environ.get("MARKET_DB_HOST"))
+
+if _USE_MARKET_DB:
+    from src.market_db import _query
+else:
+    from src.kis_readonly_client import get
 
 # 한글 폰트
 font_path = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
@@ -23,8 +29,31 @@ plt.rcParams["axes.unicode_minus"] = False
 
 
 def fetch_candles(code: str, days: int = 90) -> pd.DataFrame:
+    from datetime import timedelta
+
+    if _USE_MARKET_DB:
+        start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        db_rows = _query(
+            "SELECT date, open, high, low, close, volume FROM daily_prices "
+            "WHERE code=? AND date>=? ORDER BY date",
+            [code, start],
+        )
+        if not db_rows:
+            return pd.DataFrame()
+        rows = []
+        for r in db_rows:
+            rows.append({
+                "Date": pd.Timestamp(r["date"]),
+                "Open": int(r["open"]),
+                "High": int(r["high"]),
+                "Low": int(r["low"]),
+                "Close": int(r["close"]),
+                "Volume": int(r["volume"]),
+            })
+        return pd.DataFrame(rows).set_index("Date").sort_index()
+
     end = datetime.now().strftime("%Y%m%d")
-    start = (datetime.now() - __import__("datetime").timedelta(days=days)).strftime("%Y%m%d")
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
     res = get(
         "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
         "FHKST03010100",

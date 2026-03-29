@@ -1,18 +1,47 @@
 """종목 일봉 이상패턴 탐지 + 뉴스 연동 분석 스크립트."""
 
 import json
+import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.kis_readonly_client import get
+
+_USE_MARKET_DB = bool(os.environ.get("MARKET_DB_HOST"))
+
+if _USE_MARKET_DB:
+    from src.market_db import _query
+else:
+    from src.kis_readonly_client import get
 
 
 def fetch_daily_chart(code: str, days: int = 60) -> list[dict]:
-    """일봉 데이터 조회."""
+    """일봉 데이터 조회. MARKET_DB_HOST 설정 시 원격 DB, 아니면 KIS API."""
     end = datetime.now().strftime("%Y%m%d")
     start = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+
+    if _USE_MARKET_DB:
+        # DB uses YYYY-MM-DD format
+        start_db = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        end_db = datetime.now().strftime("%Y-%m-%d")
+        rows = _query(
+            "SELECT date, open, high, low, close, volume FROM daily_prices "
+            "WHERE code=? AND date>=? AND date<=? ORDER BY date",
+            [code, start_db, end_db],
+        )
+        return [
+            {
+                "date": r["date"].replace("-", ""),
+                "open": int(r["open"]),
+                "high": int(r["high"]),
+                "low": int(r["low"]),
+                "close": int(r["close"]),
+                "volume": int(r["volume"]),
+            }
+            for r in rows
+        ]
+
     res = get(
         "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
         "FHKST03010100",
@@ -46,15 +75,32 @@ def fetch_daily_chart(code: str, days: int = 60) -> list[dict]:
     return sorted(parsed, key=lambda x: x["date"])
 
 
-def fetch_investor(code: str) -> list[dict]:
+def fetch_investor(code: str) -> dict:
     """투자자별 매매동향 조회."""
+    if _USE_MARKET_DB:
+        rows = _query(
+            "SELECT date, foreign_net, institution_net, individual_net "
+            "FROM investor_flow WHERE code=? ORDER BY date DESC LIMIT 30",
+            [code],
+        )
+        result = {}
+        for r in rows:
+            d = r["date"].replace("-", "")
+            result[d] = {
+                "date": d,
+                "foreign": int(r.get("foreign_net") or 0),
+                "institution": int(r.get("institution_net") or 0),
+                "individual": int(r.get("individual_net") or 0),
+            }
+        return result
+
     res = get(
         "/uapi/domestic-stock/v1/quotations/inquire-investor",
         "FHKST01010900",
         {"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": code},
     )
     if not res:
-        return []
+        return {}
     items = res.get("output", [])
     parsed = []
     for item in items:
@@ -74,6 +120,8 @@ def fetch_investor(code: str) -> list[dict]:
 
 def fetch_news(code: str, date_from: str, date_to: str) -> list[dict]:
     """종목 뉴스 조회."""
+    if _USE_MARKET_DB:
+        return []  # 원격 DB에 뉴스 없음 — KIS API 전용
     res = get(
         "/uapi/domestic-stock/v1/quotations/news-title",
         "FHKST01011800",
