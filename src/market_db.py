@@ -237,7 +237,50 @@ CREATE TABLE IF NOT EXISTS news (
     UNIQUE (code, date, time, title)
 );
 
+-- 예측
+CREATE TABLE IF NOT EXISTS predictions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL,
+    date TEXT NOT NULL,
+    score REAL NOT NULL,
+    signal TEXT NOT NULL,
+    entry_price INTEGER NOT NULL,
+    target_price INTEGER NOT NULL,
+    stop_price INTEGER NOT NULL,
+    timeframe INTEGER NOT NULL DEFAULT 5,
+    exit_price INTEGER,
+    max_price INTEGER,
+    min_price INTEGER,
+    result TEXT DEFAULT 'pending',
+    return_pct REAL,
+    factor_scores TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    evaluated_at TEXT,
+    UNIQUE (code, date)
+);
+
+CREATE TABLE IF NOT EXISTS scoring_weights (
+    version INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    weights TEXT NOT NULL,
+    accuracy REAL,
+    sample_size INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS factor_stats (
+    factor TEXT NOT NULL,
+    period TEXT NOT NULL,
+    hit_count INTEGER DEFAULT 0,
+    miss_count INTEGER DEFAULT 0,
+    avg_contribution REAL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    PRIMARY KEY (factor, period)
+);
+
 -- 인덱스
+CREATE INDEX IF NOT EXISTS idx_pred_date ON predictions(date);
+CREATE INDEX IF NOT EXISTS idx_pred_result ON predictions(result);
 CREATE INDEX IF NOT EXISTS idx_news_code_date ON news(code, date);
 CREATE INDEX IF NOT EXISTS idx_surge_date ON surge_alerts(date);
 CREATE INDEX IF NOT EXISTS idx_indices_date ON daily_indices(date);
@@ -679,6 +722,40 @@ def get_news(code=None, date=None, start=None, end=None, limit=50):
         sql += " AND date<=?"
         params.append(end)
     sql += " ORDER BY date DESC, time DESC LIMIT ?"
+    params.append(limit)
+    return _query(sql, params)
+
+
+# ── Predictions ────────────────────────────────────────
+
+def upsert_prediction(row):
+    """예측 기록 upsert."""
+    conn = _get_conn()
+    conn.execute(
+        """INSERT OR REPLACE INTO predictions
+           (code, date, score, signal, entry_price, target_price,
+            stop_price, timeframe, factor_scores, result)
+           VALUES (:code, :date, :score, :signal, :entry_price,
+            :target_price, :stop_price, :timeframe, :factor_scores, 'pending')""",
+        row,
+    )
+    conn.commit()
+
+
+def get_predictions(date=None, signal=None, result=None, limit=50):
+    """예측 조회."""
+    sql = "SELECT p.*, s.name FROM predictions p LEFT JOIN securities s ON s.code=p.code WHERE 1=1"
+    params = []
+    if date:
+        sql += " AND p.date=?"
+        params.append(date)
+    if signal:
+        sql += " AND p.signal=?"
+        params.append(signal)
+    if result:
+        sql += " AND p.result=?"
+        params.append(result)
+    sql += " ORDER BY p.score DESC LIMIT ?"
     params.append(limit)
     return _query(sql, params)
 

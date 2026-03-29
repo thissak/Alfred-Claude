@@ -9,6 +9,8 @@
   16:20  스크리닝 지표  → daily_screening
   16:30  급등 뉴스 스크리닝 → surge_alerts
   16:35  관심종목+급등종목 뉴스 → news
+  16:40  예측 검증 (5일 전 예측 vs 실제)
+  16:41  눌림목 예측 스코어링 → predictions
 
 환경변수:
   KIS_THROTTLE=0.067   (15 RPS, 기본 0.5)
@@ -439,6 +441,20 @@ def run_daily_collection():
     compute_screening(date_str)
     scan_surge_alerts(date_str)
     scan_news(date_str)
+
+    # 예측 피드백 루프
+    try:
+        from validator import run_daily_validation
+        from predictor import run_daily_prediction
+
+        val = run_daily_validation()
+        log(f"검증: {val['evaluated']}건, weights={'updated' if val['new_weights'] else 'unchanged'}")
+
+        preds = run_daily_prediction(date_str)
+        buy_cnt = sum(1 for p in preds if p["signal"] == "buy")
+        log(f"예측: {len(preds)}건 ({buy_cnt} buy, {len(preds)-buy_cnt} watch)")
+    except Exception as e:
+        log(f"예측 루프 에러: {e}")
 
     elapsed = time.time() - t0
     log(f"=== 일일 수집 완료 ({elapsed:.0f}초) ===")
