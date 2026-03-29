@@ -1,7 +1,7 @@
-"""predictor.py — 급등 후 눌림목 예측 스코어링 (v4).
+"""predictor.py — 두 트랙 예측 스코어링.
 
-4대 축: 기술적(25) + 재료소화(30) + 수급(25) + 펀더멘탈(20) = 100점
-v4 추가: 거래량 선행 시그널 감점, 밸류트랩 감점
+Track A (테마 모멘텀): 재료강도(30) + 수급집중(30) + 모멘텀(25) + 매수타이밍(15)
+Track B (눌림 가치):  기술적(25) + 재료소화(30) + 수급(25) + 펀더멘탈(20)
 """
 
 import json
@@ -52,6 +52,11 @@ def score_stock(code, date):
             surge_day = p
             break
     if not surge_day:
+        return None
+
+    # 거래량 필터 — 최근 5일 평균 10만주 미만 제외
+    avg_vol = sum(p["volume"] for p in prices[:5] if p["volume"]) / min(5, len(prices))
+    if avg_vol < 100000:
         return None
 
     # 눌림 계산
@@ -234,6 +239,7 @@ def score_stock(code, date):
         "date": date,
         "score": total,
         "signal": signal,
+        "track": "B",
         "entry_price": close,
         "target_price": int(close * (1 + TARGET_PCT / 100)),
         "stop_price": int(close * (1 + STOP_PCT / 100)),
@@ -245,13 +251,205 @@ def score_stock(code, date):
     }
 
 
+def score_momentum(code, date):
+    """Track A: 테마 모멘텀 스코어링.
+    재료강도(30) + 수급집중(30) + 모멘텀(25) + 매수타이밍(15) = 100점.
+    """
+    # 최근 10일 가격
+    prices = db._query(
+        "SELECT date, close, high, low, volume, change_rate FROM daily_prices "
+        "WHERE code=? AND date<=? ORDER BY date DESC LIMIT 10", [code, date]
+    )
+    if len(prices) < 5:
+        return None
+
+    today = prices[0]
+    close = today["close"]
+    if not close:
+        return None
+
+    # 거래량 필터 — 최근 5일 평균 10만주 미만 제외
+    avg_vol = sum(p["volume"] for p in prices[:5] if p["volume"]) / min(5, len(prices))
+    if avg_vol < 100000:
+        return None
+
+    # 최근 5일 내 급등(+5%) 횟수
+    surge_days = sum(1 for p in prices[:5]
+                     if p["change_rate"] and p["change_rate"] >= 5)
+    if surge_days == 0:
+        return None  # 최근 급등 없으면 트랙A 대상 아님
+
+    # 최근 급등일 찾기
+    surge_day = None
+    for p in prices[1:]:
+        if p["change_rate"] and p["change_rate"] >= 5:
+            surge_day = p
+            break
+
+    # 스크리닝
+    scr = db._query(
+        "SELECT * FROM daily_screening WHERE code=? AND date=?", [code, date]
+    )
+    if not scr:
+        return None
+    s = scr[0]
+
+    # 수급 (5일, 20일)
+    f5 = s.get("foreign_net_5d") or 0
+    i5 = s.get("institution_net_5d") or 0
+    f20 = s.get("foreign_net_20d") or 0
+
+    # 뉴스
+    start_date = prices[-1]["date"]
+    news = db._query(
+        "SELECT COUNT(*) as cnt FROM news WHERE code=? "
+        "AND date BETWEEN ? AND ?", [code, start_date, date]
+    )
+    nc = (news[0]["cnt"] if news else 0) or 0
+
+    # surge_alerts 확인
+    surge_alert = db._query(
+        "SELECT * FROM surge_alerts WHERE code=? AND date>=? LIMIT 1",
+        [code, start_date]
+    )
+    has_alert = len(surge_alert) > 0
+
+    # MA
+    ma5 = s.get("ma5") or 0
+    ma20 = s.get("ma20") or 0
+    ma60 = s.get("ma60") or 0
+    ret_5d = s.get("return_5d") or 0
+    ret_20d = s.get("return_20d") or 0
+
+    # 고점 대비 현재 위치
+    recent_high = max(p["high"] for p in prices[:5] if p["high"])
+    from_high = (close - recent_high) / recent_high * 100 if recent_high else 0
+
+    # === Track A 스코어링 ===
+
+    # 1. 재료 강도 (30점) — 뉴스 많고 재료 뚜렷할수록 가점
+    catalyst = 5
+    if nc >= 10:
+        catalyst += 15  # 뉴스 폭발
+    elif nc >= 5:
+        catalyst += 12
+    elif nc >= 2:
+        catalyst += 8
+    elif nc >= 1:
+        catalyst += 5
+    # surge alert에 뉴스 촉매 있으면 가점
+    if has_alert:
+        catalyst += 5
+    # 급등률 높을수록 재료 강함
+    max_surge = max((p["change_rate"] or 0) for p in prices[:5])
+    if max_surge >= 20:
+        catalyst += 5
+    elif max_surge >= 15:
+        catalyst += 3
+    catalyst = max(0, min(30, catalyst))
+
+    # 2. 수급 집중 (30점) — 외인+기관 동시매수, 규모, 연속성
+    supply = 0
+    if f5 > 0 and i5 > 0:
+        supply += 15  # 양쪽 매수
+    elif f5 > 0:
+        supply += 8
+    elif i5 > 0:
+        supply += 7
+    elif f5 < 0 and i5 < 0:
+        supply -= 5
+    # 규모
+    smart5 = f5 + i5
+    if smart5 > 1000000:
+        supply += 10
+    elif smart5 > 500000:
+        supply += 7
+    elif smart5 > 100000:
+        supply += 4
+    # 20일 외인 추세
+    if f20 > 0:
+        supply += 5
+    supply = max(0, min(30, supply))
+
+    # 3. 모멘텀 (25점) — 연속 급등, MA 정배열, 추세 강도
+    momentum = 0
+    # 연속 급등일
+    if surge_days >= 3:
+        momentum += 12
+    elif surge_days >= 2:
+        momentum += 8
+    else:
+        momentum += 4
+    # MA 정배열
+    if ma5 and ma20 and ma60:
+        if close > ma5 > ma20 > ma60:
+            momentum += 8  # 완벽 정배열
+        elif close > ma20 > ma60:
+            momentum += 5
+        elif close > ma60:
+            momentum += 2
+    # 20일 수익률
+    if ret_20d > 30:
+        momentum += 5  # 강한 추세
+    elif ret_20d > 15:
+        momentum += 4
+    elif ret_20d > 5:
+        momentum += 2
+    momentum = max(0, min(25, momentum))
+
+    # 4. 매수 타이밍 (15점) — 고점 대비 눌림 구간이면 가점
+    timing = 5  # 기본
+    if -10 <= from_high <= -3:
+        timing += 10  # 적정 눌림 = 최적 진입
+    elif -3 < from_high <= 0:
+        timing += 5   # 고점 부근 = 보통
+    elif from_high > 0:
+        timing += 3   # 신고가 돌파 = 추격
+    elif from_high < -10:
+        timing += 0   # 깊은 하락 = 모멘텀 꺾임
+    # 당일 음봉이면 눌림 진입 기회
+    if today["change_rate"] and today["change_rate"] < 0:
+        timing += 3
+    timing = max(0, min(15, timing))
+
+    total = catalyst + supply + momentum + timing
+    signal = "buy" if total >= BUY_THRESHOLD else (
+        "watch" if total >= WATCH_THRESHOLD else "skip"
+    )
+
+    return {
+        "code": code,
+        "date": date,
+        "score": total,
+        "signal": signal,
+        "track": "A",
+        "entry_price": close,
+        "target_price": int(close * (1 + TARGET_PCT / 100)),
+        "stop_price": int(close * (1 + STOP_PCT / 100)),
+        "timeframe": TIMEFRAME,
+        "factor_scores": json.dumps({
+            "catalyst": catalyst, "supply": supply,
+            "momentum": momentum, "timing": timing,
+        }),
+    }
+
+
 def run_daily_prediction(date):
-    """전 종목 스크리닝 → 눌림목 예측 기록."""
+    """전 종목 스크리닝 → Track A + Track B 예측 기록."""
     codes = db.get_active_codes()
     results = []
     for code in codes:
-        r = score_stock(code, date)
-        if r and r["signal"] != "skip":
-            db.upsert_prediction(r)
-            results.append(r)
+        # Track B: 눌림 가치
+        rb = score_stock(code, date)
+        if rb and rb["signal"] != "skip":
+            rb["track"] = "B"
+            db.upsert_prediction(rb)
+            results.append(rb)
+            continue  # 한 종목은 하나의 트랙만
+
+        # Track A: 테마 모멘텀
+        ra = score_momentum(code, date)
+        if ra and ra["signal"] != "skip":
+            db.upsert_prediction(ra)
+            results.append(ra)
     return results

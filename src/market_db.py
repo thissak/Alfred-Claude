@@ -254,6 +254,7 @@ CREATE TABLE IF NOT EXISTS predictions (
     result TEXT DEFAULT 'pending',
     return_pct REAL,
     factor_scores TEXT,
+    track TEXT DEFAULT 'B',
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     evaluated_at TEXT,
     UNIQUE (code, date)
@@ -734,9 +735,10 @@ def upsert_prediction(row):
     conn.execute(
         """INSERT OR REPLACE INTO predictions
            (code, date, score, signal, entry_price, target_price,
-            stop_price, timeframe, factor_scores, result)
+            stop_price, timeframe, factor_scores, track, result)
            VALUES (:code, :date, :score, :signal, :entry_price,
-            :target_price, :stop_price, :timeframe, :factor_scores, 'pending')""",
+            :target_price, :stop_price, :timeframe, :factor_scores,
+            :track, 'pending')""",
         row,
     )
     conn.commit()
