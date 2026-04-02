@@ -27,8 +27,27 @@ src/runtime/scheduler_worker.py
 -> src/alf_bridge.py
 ```
 
-## Source Of Truth
+## SSOT (Single Source of Truth)
 
+**맥프로** = 코드 편집·git·Claude Code 사용 (유일한 SSOT)
+**맥미니** = 런타임 전용 (데몬·DB·iMessage)
+
+배포: 맥프로에서 `./deploy.sh` → rsync → 맥미니
+
+### 맥미니에서 허용되는 작업
+- `python3 daemon_ctl.py status/logs/stop/start` — 데몬 운영
+- `sqlite3 data/market.db` — DB 직접 조회
+- `cat run/outbox/*.json`, `tail logs/*.log` — 상태 확인
+- 긴급 데몬 재시작
+
+### 맥미니에서 금지
+- **코드 편집 금지** — 다음 deploy.sh에서 덮어써짐
+- **git 명령 금지** — .git 없음
+- **Claude Code로 코드 수정 금지**
+
+코드 수정이 필요하면 반드시 맥프로에서 편집 → `./deploy.sh -r` 배포.
+
+### 문서 우선순위
 - Current progress: `docs/PROGRESS.md`
 - Architecture decisions: `docs/adr/`
 - Temporary handoff notes: `docs/handoff/`
@@ -64,16 +83,17 @@ If a handoff doc conflicts with an ADR or current code, trust the code first, th
 
 ## Daemons
 
-Default operational daemons:
+Operational daemons (launchd, 8개):
 
-- `bridge`
-- `inbox`
-- `schedule`
-- `email`
-
-Legacy daemon:
-
-- `alf`
+- `bridge` — iMessage 브릿지
+- `inbox` — 수신 메시지 처리
+- `schedule` — 예약 작업 실행
+- `email` — 네이버 IMAP
+- `collector` — 장마감 전종목 수집
+- `intraday` — 장중 급등/급락 알림
+- `market-api` — DB HTTP API (port 8001)
+- `buy-alert` — 매수 타이밍 알림
+- `trump` — 트럼프 SNS 모니터
 
 Useful commands:
 
