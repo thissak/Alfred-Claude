@@ -9,13 +9,13 @@ LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXCLUDES=(
   run/
   logs/
-  "data/market.db*"
-  "data/alf.db*"
+  data/
   "memory/alf.db*"
   .env
   .claude/settings.local.json
   apps/
   .git/
+  .pytest_cache/
 )
 
 EXCLUDE_ARGS=()
