@@ -19,6 +19,8 @@ try:
 except ModuleNotFoundError:
     from src.runtime.orchestrator import MODEL, handle_inbox_message
 
+from heartbeat import beat
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 INBOX = PROJECT_ROOT / "run" / "inbox"
 LOCK_FILE = PROJECT_ROOT / "run" / "inbox.lock"
@@ -64,12 +66,17 @@ def main():
     if args.watch:
         print(f"Inbox 감시 시작: {INBOX}")
         print(f"모델: {MODEL}")
+        beat("inbox", "ok", "감시 시작")
         while True:
-            for m in get_pending():
+            pending = get_pending()
+            for m in pending:
                 try:
+                    beat("inbox", "ok", f"처리 중: {m.get('message', '')[:30]}")
                     process(m)
                 except Exception as e:
+                    beat("inbox", "error", str(e)[:100])
                     print(f"[에러] {e}")
+            beat("inbox", "idle" if not pending else "ok", f"대기 중 ({len(pending)}건 처리)")
             time.sleep(2)
     else:
         msgs = get_pending()

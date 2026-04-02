@@ -77,6 +77,12 @@
 - [x] Trading Journal 웹앱 초기 구축 (`apps/trading-journal/`)
 - [x] surge 스킬 — 일봉 이상패턴 + 뉴스·수급 연동 분석 + 차트 + 노션 저장
 - [x] KIS 뉴스 API 연동 (FHKST01011800)
+- [x] news 테이블 + collector 뉴스 자동 수집
+- [x] securities 섹터 백필 (3,583종목)
+- [x] market-api CTE/PRAGMA 지원
+- [x] 예측 피드백 루프 (predictor v4 + validator)
+- [x] Track A(테마 모멘텀) + Track B(눌림 가치) 이중 트랙
+- [x] 백테스트 검증 — 75점+ 적중률 73.1%, TOP10 적중 9/10
 - [ ] 매일 리포트에 급등락 스크리닝 통합
 - [ ] 배치 수집 스크립트 (`screener_v2/run.py`)
 - [ ] 장 마감 후 cron 연동 (KR 16:00, US 06:00)

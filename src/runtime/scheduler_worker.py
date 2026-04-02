@@ -31,6 +31,8 @@ except ModuleNotFoundError:
 
 load_dotenv()
 
+from heartbeat import beat
+
 RECIPIENT = os.environ["ALF_MY_NUMBER"]
 POLL_INTERVAL = 2
 
@@ -71,13 +73,16 @@ def main():
         return
 
     print(f"Scheduler 감시 시작 — recipient: {RECIPIENT}")
+    beat("schedule", "ok", "시작됨")
     while True:
         try:
-            process_due_jobs()
+            n = process_due_jobs()
+            beat("schedule", "ok" if n else "idle", f"처리 {n}건" if n else "대기 중")
         except KeyboardInterrupt:
             print("Scheduler 종료")
             break
         except Exception as exc:
+            beat("schedule", "error", str(exc)[:100])
             print(f"[sched] loop error: {exc}")
         time.sleep(POLL_INTERVAL)
 

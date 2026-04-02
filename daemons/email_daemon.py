@@ -10,6 +10,9 @@ from datetime import datetime
 from dotenv import load_dotenv
 from imap_tools import MailBox, AND
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from heartbeat import beat
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 EMAIL = os.environ.get("NAVER_EMAIL", "")
@@ -73,11 +76,13 @@ def run():
         print("[email_daemon] NAVER_EMAIL / NAVER_APP_PASSWORD 미설정")
         sys.exit(1)
 
+    beat("email", "ok", "시작됨")
     while True:
         try:
             with MailBox(IMAP_HOST).login(EMAIL, PASSWORD) as mb:
                 print(f"[email_daemon] {EMAIL} 로그인 성공")
                 fetch_and_save(mb)
+            beat("email", "ok", "폴링 완료")
             print(f"[email_daemon] 다음 폴링까지 {POLL_INTERVAL}초 대기")
             time.sleep(POLL_INTERVAL)
 
@@ -85,6 +90,7 @@ def run():
             print("[email_daemon] 종료")
             break
         except Exception as e:
+            beat("email", "error", str(e)[:100])
             print(f"[email_daemon] 에러: {e}, {RETRY_DELAY}초 후 재시도")
             time.sleep(RETRY_DELAY)
 

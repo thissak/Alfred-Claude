@@ -1,6 +1,5 @@
 #!/bin/bash
-# 장 마감 리포트 트리거 — launchd에서 호출
-# report_manager.py가 Claude 호출 + 노션 저장 + 폴백 관리
+# Daily Surge 스크리닝 트리거 — launchd에서 호출
 
 set -e
 
@@ -9,4 +8,4 @@ export PATH="/opt/homebrew/bin:/Users/afred/.local/bin:/usr/local/bin:/usr/bin:/
 
 cd "$PROJECT_DIR"
 
-python3 skills/report/report_manager.py
+python3 skills/report/daily_surge_manager.py

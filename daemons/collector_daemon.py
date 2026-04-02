@@ -40,6 +40,7 @@ from screener import _download_master, _parse_master
 from kis_endpoints import fetch_kr_price_detail, fetch_kr_investor
 from kis_readonly_client import get as kis_get
 from normalize import _safe_int, _safe_float
+from heartbeat import beat
 
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from scan_surge import scan_eod, log as surge_log
@@ -476,10 +477,12 @@ def already_collected_today():
 def run():
     db.init()
     log("collector daemon 시작")
+    beat("collector", "ok", "시작됨")
 
     # 즉시 실행 모드 (테스트용)
     if os.environ.get("COLLECTOR_RUN_NOW") == "1":
         run_daily_collection()
+        beat("collector", "ok", "즉시 실행 완료")
         return
 
     # 시간 기반 트리거
@@ -493,12 +496,15 @@ def run():
             # 평일 15:45에 트리거
             if is_weekday() and 1545 <= hour_min <= 1550 and not triggered_today:
                 triggered_today = True
+                beat("collector", "ok", "수집 시작")
                 run_daily_collection()
+                beat("collector", "ok", "수집 완료")
 
             # 자정에 리셋
             if hour_min < 100:
                 triggered_today = False
 
+            beat("collector", "idle", f"대기 중 (triggered={triggered_today})")
             time.sleep(POLL_INTERVAL)
 
         except KeyboardInterrupt:

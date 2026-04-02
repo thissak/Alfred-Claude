@@ -2,6 +2,12 @@
 
 ## 2026-03-29
 
+- [feat] 예측 피드백 루프 구현 (`src/predictor.py`, `src/validator.py`) — 4대축 스코어링 + 5일 후 자동 검증 + 가중치 자동 조정
+- [feat] Track A(테마 모멘텀) + Track B(눌림 가치) 이중 트랙 예측 시스템
+- [feat] predictor v4 — 거래량 선행 시그널 감점, 밸류트랩(저PER+이익감소) 감점, 최소 거래량 필터(10만주)
+- [feat] news 테이블 신설 + collector 뉴스 수집 — 관심종목+급등종목 뉴스 자동 수집, 맥프로에서 원격 조회
+- [feat] market-api WITH/PRAGMA 쿼리 허용 — CTE 기반 복합 분석 가능
+- [feat] securities 섹터 백필 — KIS inquire-price API로 3,583종목 업종 입력
 - [feat] market-api 데몬 신설 (`daemons/market_api.py`) — market.db 읽기 전용 HTTP SQL 프록시 (port 8001)
 - [feat] `src/market_db.py` 원격 모드 추가 — `MARKET_DB_HOST` 환경변수로 맥프로에서 맥미니 DB 원격 조회
 - [feat] `daemon_ctl.py`에 market-api 데몬 등록

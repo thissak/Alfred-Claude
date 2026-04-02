@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
 import market_db as db
+from heartbeat import beat
 
 ALERTS_PATH = ROOT / "data" / "buy_alerts.yaml"
 OUTBOX = ROOT / "run" / "outbox"
@@ -152,11 +153,13 @@ def check_alerts():
 def run():
     """메인 루프."""
     log("데몬 시작")
+    beat("buy-alert", "ok", "시작됨")
     triggered_today = False
 
     if os.environ.get("BUY_ALERT_RUN_NOW"):
         log("즉시 실행 모드")
         check_alerts()
+        beat("buy-alert", "ok", "즉시 실행 완료")
         log("즉시 실행 완료")
         return
 
@@ -169,13 +172,18 @@ def run():
             if is_weekday and hm >= TRIGGER_TIME and not triggered_today:
                 triggered_today = True
                 log("장 마감 체크 시작")
+                beat("buy-alert", "ok", "알림 체크 중")
                 check_alerts()
+                beat("buy-alert", "ok", "체크 완료")
                 log("장 마감 체크 완료")
 
             if hm < 100:
                 triggered_today = False
 
+            beat("buy-alert", "idle", f"대기 중 (triggered={triggered_today})")
+
         except Exception:
+            beat("buy-alert", "error", traceback.format_exc()[:100])
             log(f"오류:\n{traceback.format_exc()}")
 
         time.sleep(POLL_INTERVAL)

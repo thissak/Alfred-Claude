@@ -9,8 +9,7 @@
 5. 각 종목의 focus 항목을 반드시 분석에 포함
 6. context가 있는 종목은 해당 맥락을 반영하여 심층 분석
 7. `run/reports/YYYY-MM-DD.md` 파일로 저장 (디렉토리 없으면 생성)
-8. `skills/research/save_note.py`의 `md_to_html`, `_save_to_notes`로 Apple Notes "Alfred" 폴더에 저장. 제목: "장 마감 리포트 (M/DD)"
-9. Notes 저장 실패 시 `run/outbox`에 JSON 작성하여 iMessage로 요약 발송
+8. 노션 저장은 매니저(report_manager.py)가 별도 처리하므로 여기서는 하지 않는다
 
 ## 규칙
 

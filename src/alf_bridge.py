@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from heartbeat import beat
+
 DB_PATH = os.path.expanduser("~/Library/Messages/chat.db")
 MY_NUMBER = os.environ["ALF_MY_NUMBER"]
 POLL_INTERVAL = 1
@@ -146,6 +148,7 @@ def main():
 
     last_rowid = get_max_rowid()
     print(f"현재 ROWID: {last_rowid}, 폴링 시작...")
+    beat("bridge", "ok", "시작됨")
     sent_texts = {}
     recent_msgs = {}
 
@@ -187,10 +190,13 @@ def main():
             sent_texts = {k: v for k, v in sent_texts.items() if v > cutoff}
             recent_msgs = {k: v for k, v in recent_msgs.items() if v > cutoff}
 
+            beat("bridge", "ok", "폴링 중")
+
         except KeyboardInterrupt:
             print("\nAlf Bridge 종료.")
             break
         except Exception as e:
+            beat("bridge", "error", str(e)[:100])
             print(f"[에러] {e}")
             traceback.print_exc()
         time.sleep(POLL_INTERVAL)
