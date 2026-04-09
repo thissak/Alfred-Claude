@@ -2,6 +2,7 @@
 
 ## 2026-04-09
 
+- [feat] KIS token 발급 감사 로깅 (`src/kis_readonly_client.py`) — `_get_token()`이 신규 발급할 때마다 시각·reason·host·pid·argv·parent cmd·call stack을 `logs/kis_token.log`에 append. 정체불명의 토큰 발급 주체 추적용. 11:20 미확인 발급 이벤트 조사 중 도입
 - [fix] inbox 프로세서 무응답 버그 — `_load_feeds()`가 `data/screener_rl_backtest.json`(list 타입)에서 `AttributeError`로 크래시, 전체 응답 파이프라인이 죽어 iMessage 무응답. `isinstance(feed, dict)` 가드 추가로 비정상 스키마 피드는 스킵
 - [fix] `handle_event()` `mark_done()` 호출 시점을 `write_response` 뒤로 이동 — 예외 발생 시 inbox 파일이 사라지던 at-most-once 안티패턴 제거, 처리 성공 시에만 삭제
 - [fix] `process_inbox.py`에 `quarantine()` 추가 — 처리 실패 메시지를 `run/inbox/failed/`로 격리해 무한 재시도 방지 + `traceback.print_exc()`로 진단성 개선

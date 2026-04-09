@@ -2,7 +2,11 @@
 
 import json
 import os
+import socket
+import subprocess
+import sys
 import time
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -128,16 +132,47 @@ def get_account():
     return _require_env("KIS_READONLY_ACCOUNT", ACCOUNT)
 
 
+def _log_token_refresh(reason):
+    """Append caller context to logs/kis_token.log for audit tracing."""
+    log_path = ROOT / "logs" / "kis_token.log"
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        ppid = os.getppid()
+        try:
+            parent_cmd = subprocess.check_output(
+                ["ps", "-p", str(ppid), "-o", "command="], text=True
+            ).strip()
+        except Exception:
+            parent_cmd = "<unknown>"
+        stack = "".join(traceback.format_stack()[:-1])
+        entry = (
+            f"=== {datetime.now().isoformat()} ===\n"
+            f"reason: {reason}\n"
+            f"host: {socket.gethostname()}\n"
+            f"pid: {os.getpid()} argv: {sys.argv}\n"
+            f"ppid: {ppid} parent: {parent_cmd}\n"
+            f"stack:\n{stack}\n"
+        )
+        with log_path.open("a") as f:
+            f.write(entry)
+    except Exception:
+        pass  # audit logging must never break the client
+
+
 def _get_token():
     """Return cached token or issue a new one."""
     _require_env("KIS_READONLY_APP_KEY", APP_KEY)
     _require_env("KIS_READONLY_APP_SECRET", APP_SECRET)
 
+    reason = "no cache"
     if TOKEN_PATH.exists():
         cached = json.loads(TOKEN_PATH.read_text())
         expires = datetime.fromisoformat(cached["expires_at"])
         if datetime.now() < expires - timedelta(minutes=10):
             return cached["access_token"]
+        reason = f"expired (expires_at={cached['expires_at']})"
+
+    _log_token_refresh(reason)
 
     res = requests.post(
         f"{BASE_URL}/oauth2/tokenP",
