@@ -2,6 +2,7 @@
 
 ## 2026-04-09
 
+- [refactor] MonitorBase 통합 아키텍처 (`src/monitor_base.py`) — 7개 모니터링 데몬의 공통 보일러플레이트(daemon loop, heartbeat, outbox, claude -p 호출, 에러 처리, 시간 게이트)를 베이스 클래스로 추출. 서브클래스는 `check()` 하나만 구현. 새 모니터 추가 시 파일 1개 + daemon_ctl 등록 1줄로 확장 가능 (ADR 014)
 - [feat] `daemons/trump_monitor.py` — 키워드 통과 건을 `claude -p`(sonnet)로 이란전 중요도 판단 후 `important=true`일 때만 해설 포함 iMessage 발송. 단순 키워드 매칭은 관세·국내정치 노이즈까지 포워딩되던 문제를 LLM 2차 필터로 해결. 호출 실패는 로그만 남기고 해당 entry 스킵 (fallback 발송 없음). 메시지 포맷 `[Trump|긴급/주의/참고] 이란전` + 해설 + 원문 + 링크
 - [fix] `skills/report/report_manager.py` 타임아웃·주말 처리 — CLAUDE_TIMEOUT 300→420초, 주말(토/일) 스킵, 타임아웃 이후라도 리포트 파일이 생성됐으면 노션 저장 복구
 - [fix] `skills/report/daily_surge_manager.py` 날짜 불일치 버그 — MAX(date) 폴백으로 전일 파일을 당일 리포트로 저장하던 문제. `run_screener(today)`에 명시적 날짜 주입 + JSON date 필드 검증 + NOTION_TIMEOUT 90→180초

@@ -40,17 +40,10 @@ from screener import _download_master, _parse_master
 from kis_endpoints import fetch_kr_price_detail, fetch_kr_investor
 from kis_readonly_client import get as kis_get
 from normalize import _safe_int, _safe_float
-from heartbeat import beat
+from monitor_base import MonitorBase
 
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from scan_surge import scan_eod, log as surge_log
-
-POLL_INTERVAL = 30  # 초
-RETRY_DELAY = 60
-
-
-def log(msg):
-    print(f"[collector {datetime.now():%H:%M:%S}] {msg}", flush=True)
 
 
 # ── 마스터파일 갱신 ─────────────────────────────────────
@@ -461,60 +454,30 @@ def run_daily_collection():
     log(f"=== 일일 수집 완료 ({elapsed:.0f}초) ===")
 
 
-def is_weekday():
-    return datetime.now().weekday() < 5
+class CollectorDaemon(MonitorBase):
+    name = "collector"
+    interval = 30
+    weekday_only = True
+
+    def on_start(self):
+        db.init()
+        self._triggered = False
+
+    def check(self):
+        hm = datetime.now().hour * 100 + datetime.now().minute
+        if hm < 100:
+            self._triggered = False
+        if 1545 <= hm <= 1550 and not self._triggered:
+            self._triggered = True
+            run_daily_collection()
+            return "수집 완료"
+        return f"대기 (triggered={self._triggered})"
 
 
-def already_collected_today():
-    """오늘 데이터가 이미 있는지 확인."""
-    today = datetime.now().strftime("%Y-%m-%d")
-    latest = db.get_latest_date("daily_prices")
-    return latest == today
-
-
-# ── 메인 루프 ───────────────────────────────────────────
-
-def run():
-    db.init()
-    log("collector daemon 시작")
-    beat("collector", "ok", "시작됨")
-
-    # 즉시 실행 모드 (테스트용)
-    if os.environ.get("COLLECTOR_RUN_NOW") == "1":
-        run_daily_collection()
-        beat("collector", "ok", "즉시 실행 완료")
-        return
-
-    # 시간 기반 트리거
-    triggered_today = False
-
-    while True:
-        try:
-            now = datetime.now()
-            hour_min = now.hour * 100 + now.minute
-
-            # 평일 15:45에 트리거
-            if is_weekday() and 1545 <= hour_min <= 1550 and not triggered_today:
-                triggered_today = True
-                beat("collector", "ok", "수집 시작")
-                run_daily_collection()
-                beat("collector", "ok", "수집 완료")
-
-            # 자정에 리셋
-            if hour_min < 100:
-                triggered_today = False
-
-            beat("collector", "idle", f"대기 중 (triggered={triggered_today})")
-            time.sleep(POLL_INTERVAL)
-
-        except KeyboardInterrupt:
-            log("종료")
-            break
-        except Exception as e:
-            log(f"에러: {e}")
-            traceback.print_exc()
-            time.sleep(RETRY_DELAY)
+# collector 내부에서 쓰는 log 함수 — 기존 파이프라인 함수들이 참조
+def log(msg):
+    print(f"[collector {datetime.now():%H:%M:%S}] {msg}", flush=True)
 
 
 if __name__ == "__main__":
-    run()
+    CollectorDaemon().run()
