@@ -1,5 +1,11 @@
 # Alf — Changelog
 
+## 2026-04-09
+
+- [fix] inbox 프로세서 무응답 버그 — `_load_feeds()`가 `data/screener_rl_backtest.json`(list 타입)에서 `AttributeError`로 크래시, 전체 응답 파이프라인이 죽어 iMessage 무응답. `isinstance(feed, dict)` 가드 추가로 비정상 스키마 피드는 스킵
+- [fix] `handle_event()` `mark_done()` 호출 시점을 `write_response` 뒤로 이동 — 예외 발생 시 inbox 파일이 사라지던 at-most-once 안티패턴 제거, 처리 성공 시에만 삭제
+- [fix] `process_inbox.py`에 `quarantine()` 추가 — 처리 실패 메시지를 `run/inbox/failed/`로 격리해 무한 재시도 방지 + `traceback.print_exc()`로 진단성 개선
+
 ## 2026-03-29
 
 - [feat] 예측 피드백 루프 구현 (`src/predictor.py`, `src/validator.py`) — 4대축 스코어링 + 5일 후 자동 검증 + 가중치 자동 조정

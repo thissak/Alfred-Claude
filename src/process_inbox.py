@@ -10,6 +10,7 @@ import argparse
 import fcntl
 import sys
 import time
+import traceback
 from pathlib import Path
 
 import json
@@ -23,7 +24,25 @@ from heartbeat import beat
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 INBOX = PROJECT_ROOT / "run" / "inbox"
+FAILED = INBOX / "failed"
 LOCK_FILE = PROJECT_ROOT / "run" / "inbox.lock"
+
+
+def quarantine(msg, error):
+    """처리 실패한 inbox 파일을 failed/ 로 이동 — 무한 재처리 방지."""
+    src_path = msg.get("_path")
+    if not src_path:
+        return
+    src = Path(src_path)
+    if not src.exists():
+        return
+    FAILED.mkdir(parents=True, exist_ok=True)
+    dest = FAILED / src.name
+    try:
+        src.rename(dest)
+        print(f"[격리] {src.name} → failed/ ({error})")
+    except OSError as e:
+        print(f"[격리 실패] {src.name}: {e}")
 
 
 def acquire_lock():
@@ -76,6 +95,8 @@ def main():
                 except Exception as e:
                     beat("inbox", "error", str(e)[:100])
                     print(f"[에러] {e}")
+                    traceback.print_exc()
+                    quarantine(m, str(e)[:100])
             beat("inbox", "idle" if not pending else "ok", f"대기 중 ({len(pending)}건 처리)")
             time.sleep(2)
     else:
@@ -88,6 +109,8 @@ def main():
                 process(m)
             except Exception as e:
                 print(f"[에러] {e}")
+                traceback.print_exc()
+                quarantine(m, str(e)[:100])
 
 
 if __name__ == "__main__":

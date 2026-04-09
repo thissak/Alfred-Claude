@@ -100,6 +100,9 @@ def _load_feeds():
                 feed = json.load(f)
         except (json.JSONDecodeError, OSError):
             continue
+        if not isinstance(feed, dict):
+            print(f"[feeds] skip {os.path.basename(path)}: not a dict ({type(feed).__name__})")
+            continue
         source = feed.get("source", os.path.basename(path))
         updated = feed.get("updated_at", "")
         items = feed.get("items", [])
@@ -220,9 +223,6 @@ def handle_event(event):
     print(f"[event] {event['type']} from={sender}")
     print(f"[수신] {sender}: {text}")
 
-    # 중복 처리 방지: 처리 시작 시 즉시 inbox 파일 제거
-    mark_done(event)
-
     # 주식 관련 키워드 감지 → data/stock.json 실시간 갱신
     _STOCK_KEYWORDS = ["미장", "주식", "시황", "종목", "주가", "포트폴리오", "내 주식", "급등", "거래량"]
     if any(kw in text for kw in _STOCK_KEYWORDS):
@@ -248,6 +248,9 @@ def handle_event(event):
 
     log_history(text, reply)
     write_response(sender, reply)
+
+    # 응답 발송 성공 후에만 inbox 파일 제거 (실패 시 재처리 가능하도록 보존)
+    mark_done(event)
 
     # compact 체크 (응답 발송 후)
     if legacy_memory.needs_compaction():
