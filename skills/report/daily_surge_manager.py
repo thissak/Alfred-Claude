@@ -23,7 +23,7 @@ SCREENER = PROJECT / "scripts" / "daily_surge_screener.py"
 NOTION_PAGE_PARENT = "336b83e1-2dd9-8141-b56f-c86bf06a33fb"  # Daily Surge 스크리닝 폴더
 
 SCREENER_TIMEOUT = 120  # 2분
-NOTION_TIMEOUT = 90
+NOTION_TIMEOUT = 180  # 3분 (haiku 노션 저장은 긴 본문 처리 시 90초 부족)
 
 
 def log(msg):
@@ -140,20 +140,25 @@ def main():
     log("=" * 50)
     log("Daily Surge 매니저 시작")
 
-    # 1. 스크리너 실행
-    output, success = run_screener()
+    # 1. 스크리너 실행 — 오늘 날짜 명시 (MAX(date) 폴백이 전일 파일을 만드는 문제 방지)
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    output, success = run_screener(today_date)
     if not success:
         log("스크리너 실패")
         return
 
-    # 2. JSON 결과 읽기
-    surge_file = find_surge_json()
+    # 2. JSON 결과 읽기 — 반드시 오늘 날짜 파일이어야 함
+    surge_file = find_surge_json(today_date)
     if not surge_file:
-        log("스크리닝 결과 JSON 없음")
+        log(f"스크리닝 결과 JSON 없음 (기대: daily_surge_{today_date}.json) — DB 미적재 가능성")
         return
 
     surge_data = json.loads(surge_file.read_text())
-    log(f"스크리닝 결과: {surge_file.name} ({len(surge_data.get('events', []))}개 이벤트)")
+    if surge_data.get("date") != today_date:
+        log(f"스크리닝 결과 날짜 불일치: 기대={today_date}, 실제={surge_data.get('date')}")
+        return
+
+    log(f"스크리닝 결과: {surge_file.name} ({len(surge_data.get('results', []))}개 이벤트)")
 
     # 3. 노션 저장
     saved = save_to_notion(surge_data, output)

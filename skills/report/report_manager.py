@@ -24,7 +24,7 @@ SYSTEM_PROMPT = PROJECT / "skills" / "report" / "system.md"
 
 NOTION_PAGE_PARENT = "336b83e1-2dd9-8124-9f20-f42c988506ec"  # 장마감 리포트 폴더 page_id
 
-CLAUDE_TIMEOUT = 300  # 5분
+CLAUDE_TIMEOUT = 420  # 7분
 NOTION_TIMEOUT = 30
 
 
@@ -283,16 +283,24 @@ def main():
     signal, pct = get_market_signal()
     log(f"시장 시그널: {signal} (정배열 {pct:.1%})")
 
-    # 2. Claude로 리포트 생성
-    output, success = run_claude()
-    if not success:
-        log("Claude 리포트 생성 실패")
-        fallback_imessage({"title": "장마감 리포트", "content": "리포트 생성 실패 (타임아웃)"})
+    # 2. 주말 체크 (토=5, 일=6)
+    if datetime.now().weekday() in (5, 6):
+        log("주말 — 장 미개장, 스킵")
         return
 
-    # 3. 리포트 파일 찾기
+    # 3. Claude로 리포트 생성
+    output, success = run_claude()
+
+    # 4. 리포트 파일 찾기 (타임아웃이어도 파일이 생성됐을 수 있음)
     report = find_latest_report()
-    if not report:
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if report and report.name == f"{today_str}.md":
+        log(f"리포트 파일 확인: {report.name}" + (" (타임아웃 후 복구)" if not success else ""))
+    elif not success:
+        log("Claude 리포트 생성 실패 — 파일도 없음")
+        fallback_imessage({"title": "장마감 리포트", "content": "리포트 생성 실패 (타임아웃)"})
+        return
+    elif not report:
         log("리포트 파일 없음")
         fallback_imessage({"title": "장마감 리포트", "content": output[:500]})
         return

@@ -2,6 +2,9 @@
 
 ## 2026-04-09
 
+- [fix] `skills/report/report_manager.py` 타임아웃·주말 처리 — CLAUDE_TIMEOUT 300→420초, 주말(토/일) 스킵, 타임아웃 이후라도 리포트 파일이 생성됐으면 노션 저장 복구
+- [fix] `skills/report/daily_surge_manager.py` 날짜 불일치 버그 — MAX(date) 폴백으로 전일 파일을 당일 리포트로 저장하던 문제. `run_screener(today)`에 명시적 날짜 주입 + JSON date 필드 검증 + NOTION_TIMEOUT 90→180초
+- [chore] `skills/report/system.md` — 리포트 파일 저장 후 즉시 종료 지시 추가 (추가 검증·웹 검색 금지)
 - [feat] KIS token 발급 감사 로깅 (`src/kis_readonly_client.py`) — `_get_token()`이 신규 발급할 때마다 시각·reason·host·pid·argv·parent cmd·call stack을 `logs/kis_token.log`에 append. 정체불명의 토큰 발급 주체 추적용. 11:20 미확인 발급 이벤트 조사 중 도입
 - [fix] inbox 프로세서 무응답 버그 — `_load_feeds()`가 `data/screener_rl_backtest.json`(list 타입)에서 `AttributeError`로 크래시, 전체 응답 파이프라인이 죽어 iMessage 무응답. `isinstance(feed, dict)` 가드 추가로 비정상 스키마 피드는 스킵
 - [fix] `handle_event()` `mark_done()` 호출 시점을 `write_response` 뒤로 이동 — 예외 발생 시 inbox 파일이 사라지던 at-most-once 안티패턴 제거, 처리 성공 시에만 삭제
