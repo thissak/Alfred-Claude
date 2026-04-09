@@ -59,6 +59,16 @@ DAEMONS = {
         "args": [],
         "desc": "매수 타이밍 알림",
     },
+    "health": {
+        "script": "daemons/health_monitor.py",
+        "args": [],
+        "desc": "GCP 서비스 헬스체크 + Claude 분석 알림",
+    },
+    "alert": {
+        "script": "daemons/alert_monitor.py",
+        "args": [],
+        "desc": "GCP Alert Pub/Sub 수신 + Claude 분석 알림",
+    },
 }
 
 ALL_DAEMONS = DAEMONS

@@ -6,6 +6,18 @@
 - [fix] `handle_event()` `mark_done()` 호출 시점을 `write_response` 뒤로 이동 — 예외 발생 시 inbox 파일이 사라지던 at-most-once 안티패턴 제거, 처리 성공 시에만 삭제
 - [fix] `process_inbox.py`에 `quarantine()` 추가 — 처리 실패 메시지를 `run/inbox/failed/`로 격리해 무한 재시도 방지 + `traceback.print_exc()`로 진단성 개선
 
+## 2026-04-08
+
+- [feat] GCP Alert 모니터 데몬 (`daemons/alert_monitor.py`) — Pub/Sub Pull로 GCP Alert 메시지 수신 → claude -p 분석 → iMessage 알림. health-monitor-reader 서비스 계정 재사용
+- [chore] `daemon_ctl.py`에 "alert" 데몬 등록 (health 데몬과 나란히)
+- [docs] `docs/health-monitor.md` — GCP 헬스 모니터 구조·엔드포인트·운영 가이드 정리
+
+## 2026-04-05
+
+- [feat] GCP 헬스 모니터 데몬 (`daemons/health_monitor.py`) — 5분 간격 4개 엔드포인트 헬스체크 + gcloud 진단 + claude -p 분석 + iMessage 알림
+- [infra] GCP read-only 서비스 계정 생성 (health-monitor-reader@etaxbook-web.iam.gserviceaccount.com) — 키 파일 `config/health-monitor-key.json`
+- [chore] `daemon_ctl.py`에 "health" 데몬 등록 + 맥미니 launchd 배포
+
 ## 2026-03-29
 
 - [feat] 예측 피드백 루프 구현 (`src/predictor.py`, `src/validator.py`) — 4대축 스코어링 + 5일 후 자동 검증 + 가중치 자동 조정
