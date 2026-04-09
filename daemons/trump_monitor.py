@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""트럼프 Truth Social RSS 모니터 — 키워드 매칭 시 iMessage 알림.
+"""트럼프 Truth Social RSS 모니터 — 키워드 필터 + claude 판단 후 iMessage 알림.
 
 RSS 소스: https://www.trumpstruth.org/feed
-동작: 5분 간격 폴링 → 키워드 필터 → outbox JSON → alf_bridge가 iMessage 발신
+동작: 5분 간격 폴링 → 키워드 pre-filter → claude -p 이란전 중요도 판단
+      → important=true면 해설 포함 outbox JSON → alf_bridge가 iMessage 발신
 
 사용법:
   python daemons/trump_monitor.py              # 데몬 모드
@@ -17,6 +18,7 @@ RSS 소스: https://www.trumpstruth.org/feed
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import traceback
@@ -38,6 +40,25 @@ from heartbeat import beat
 RECIPIENT = os.environ.get("ALF_MY_NUMBER", "")
 POLL_INTERVAL = int(os.environ.get("TRUMP_INTERVAL", "300"))
 FEED_URL = "https://www.trumpstruth.org/feed"
+CLAUDE_CLI = "/Users/afred/.local/bin/claude"
+
+SYSTEM_PROMPT = """\
+너는 이란전(이란 vs 이스라엘/미국 충돌) 전문 분석가다.
+트럼프 대통령의 Truth Social 포스트가 이란전과 관련된 중요 정보인지 판단한다.
+
+## 판단 기준
+- important=true: 이란에 대한 군사행동·위협·협상·제재, 호르무즈 해협, 핵 프로그램·우라늄 농축,
+  이란 지도부(하메네이 등), 이스라엘-이란 충돌, 미군 중동 배치/철수, 휴전/출구전략 등
+  이란전 향방에 실질 영향을 줄 수 있는 내용
+- important=false: 이란 단어만 스치듯 언급되거나, 이란전과 무관한 관세·국내정치·일상 포스트,
+  과거 치적 자랑 등
+
+## 출력 형식 (반드시 JSON만, 코드펜스/설명 금지)
+{"important": true, "severity": "긴급|주의|참고", "commentary": "한국어 3~5줄 해설"}
+
+- commentary: 왜 중요한지, 맥락, 시장/외교 영향을 3~5줄로 간결하게
+- important=false면 severity="참고", commentary=""
+"""
 
 # ── 키워드 필터 ────────────────────────────────────────
 # 카테고리별 키워드. 하나라도 매칭되면 알림.
@@ -122,17 +143,74 @@ def match_keywords(text):
     return sorted(categories)
 
 
-def format_alert(entry, categories):
-    """알림 메시지 포맷."""
+def strip_html(text):
+    """description의 HTML 태그 제거 (claude 프롬프트용)."""
+    return re.sub(r"<[^>]+>", " ", text or "")
+
+
+# ── Claude 판단 ────────────────────────────────────────
+
+def ask_claude(title, desc):
+    """claude -p로 이란전 중요도 판단. Returns: dict 또는 None."""
+    clean_desc = strip_html(desc)[:2000]
+    prompt = f"""\
+다음 트럼프 Truth Social 포스트를 이란전 관점에서 판단해줘.
+
+제목: {title}
+
+본문: {clean_desc}
+
+JSON만 출력."""
+
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+
+    cmd = [
+        CLAUDE_CLI, "-p",
+        "--model", "sonnet",
+        "--output-format", "json",
+        "--max-turns", "1",
+        "--allowedTools", "",
+        "--system-prompt", SYSTEM_PROMPT,
+        prompt,
+    ]
+    log("claude -p 판단 시작...")
+
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=120, env=env,
+        )
+        if result.returncode != 0:
+            log(f"claude 에러: {result.stderr.strip()[:200]}")
+            return None
+        outer = json.loads(result.stdout)
+        raw = (outer.get("result") or "").strip()
+        # 코드펜스 방어
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.DOTALL).strip()
+        verdict = json.loads(raw)
+        return verdict
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError) as e:
+        log(f"claude 실패: {e}")
+        return None
+
+
+def format_alert(entry, verdict):
+    """알림 메시지 포맷 — claude 해설 포함."""
     title = entry.get("title", "").strip()
     link = entry.get("link", "")
     pub = entry.get("published", "")
-    cats = ", ".join(f"#{c}" for c in categories)
+    severity = verdict.get("severity", "참고")
+    commentary = (verdict.get("commentary") or "").strip()
 
     lines = [
-        f"[Trump] {cats}",
+        f"[Trump|{severity}] 이란전",
         "",
-        title[:200],
+        "== 해설 ==",
+        commentary or "(해설 없음)",
+        "",
+        "== 원문 ==",
+        title[:500],
         "",
         link,
     ]
@@ -186,6 +264,7 @@ def check_feed():
 
     # 오래된 것부터 처리 (시간순 알림)
     alerts = 0
+    judged = 0
     for entry, post_id in reversed(new_entries):
         title = entry.get("title", "")
         desc = entry.get("description", "")
@@ -195,16 +274,29 @@ def check_feed():
         if title.startswith("RT @"):
             continue
 
+        # 1단계: 키워드 pre-filter
         categories = match_keywords(full_text)
-        if categories:
-            msg = format_alert(entry, categories)
-            write_outbox(msg)
-            log(f"ALERT [{', '.join(categories)}] {title[:60]}")
-            alerts += 1
-        else:
-            log(f"skip: {title[:60]}")
+        if not categories:
+            log(f"skip(no keyword): {title[:60]}")
+            continue
 
-    log(f"체크 완료: {len(new_entries)}건 중 {alerts}건 알림")
+        # 2단계: claude 이란전 중요도 판단
+        judged += 1
+        verdict = ask_claude(title, desc)
+        if verdict is None:
+            log(f"skip(claude failed): {title[:60]}")
+            continue
+
+        if not verdict.get("important"):
+            log(f"skip(not important): {title[:60]}")
+            continue
+
+        msg = format_alert(entry, verdict)
+        write_outbox(msg)
+        log(f"ALERT [{verdict.get('severity', '?')}] {title[:60]}")
+        alerts += 1
+
+    log(f"체크 완료: {len(new_entries)}건 중 {judged}건 판단, {alerts}건 알림")
     return alerts
 
 
