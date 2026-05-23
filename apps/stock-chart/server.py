@@ -43,17 +43,17 @@ def get_ohlcv(code, rng):
     limit = RANGE_LIMIT.get(rng, RANGE_LIMIT["1y"])
     rows = db.get_daily_prices(code, limit=limit)  # DESC
     rows = list(reversed(rows))  # 차트는 오름차순 필요
-    ohlcv = [
-        {
-            "time": r["date"],
-            "open": r["open"],
-            "high": r["high"],
-            "low": r["low"],
-            "close": r["close"],
-            "volume": r["volume"],
-        }
-        for r in rows
-    ]
+    ohlcv = []
+    for r in rows:
+        c = r["close"]
+        if not c or c <= 0:
+            continue  # 종가 없는 행 제외 (옛 데이터 결손)
+        # 시가/고가/저가가 비거나 0이면 종가로 대체 (플랫 캔들)
+        o = r["open"] if r["open"] and r["open"] > 0 else c
+        h = r["high"] if r["high"] and r["high"] > 0 else c
+        lo = r["low"] if r["low"] and r["low"] > 0 else c
+        ohlcv.append({"time": r["date"], "open": o, "high": h, "low": lo,
+                      "close": c, "volume": r["volume"] or 0})
     return {"code": code, "name": _stock_name(code), "ohlcv": ohlcv}
 
 
