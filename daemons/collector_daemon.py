@@ -17,8 +17,10 @@
   COLLECTOR_RUN_NOW=1   (즉시 1회 실행, 테스트용)
 """
 
+import concurrent.futures as cf
 import os
 import sys
+import threading
 import time
 import traceback
 from datetime import datetime, timedelta
@@ -44,6 +46,54 @@ from monitor_base import MonitorBase
 
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from scan_surge import scan_eod, log as surge_log
+
+
+# ── 병렬 수집 헬퍼 (재시도 + 레이트게이트) ──────────────
+# KIS 콜은 latency(~수초)라 병렬로 겹쳐 처리. 한계는 "초당 거래건수"(~13 RPS)이므로
+# COLLECTOR_RATE로 게이트하고, ConnectionError 등 일시 실패는 재시도해 누락을 막는다.
+COLLECTOR_RATE = float(os.environ.get("COLLECTOR_RATE", "11"))   # 초당 콜 상한
+COLLECTOR_WORKERS = int(os.environ.get("COLLECTOR_WORKERS", "40"))
+
+_rl_lock = threading.Lock()
+_next_slot = [0.0]
+
+
+def _gate():
+    with _rl_lock:
+        now = time.time()
+        wait = _next_slot[0] - now
+        _next_slot[0] = max(now, _next_slot[0]) + 1.0 / COLLECTOR_RATE
+    if wait > 0:
+        time.sleep(wait)
+
+
+def collect_parallel(codes, fetch_fn, label):
+    """종목별 fetch_fn(code)를 병렬 호출 (게이트+재시도). {code: result} 반환.
+    일시 실패(ConnectionError 등)는 5회 재시도해 누락을 막는다."""
+    results = {}
+    fail = []
+    rlock = threading.Lock()
+
+    def one(code):
+        for _ in range(5):
+            _gate()
+            try:
+                r = fetch_fn(code)
+            except Exception:
+                r = None
+            if r:
+                with rlock:
+                    results[code] = r
+                return
+            time.sleep(0.4)
+        with rlock:
+            fail.append(code)
+
+    with cf.ThreadPoolExecutor(max_workers=COLLECTOR_WORKERS) as ex:
+        list(ex.map(one, codes))
+    if fail:
+        log(f"{label}: {len(fail)}/{len(codes)}종목 수집 실패 (재시도 소진)")
+    return results
 
 
 # ── 마스터파일 갱신 ─────────────────────────────────────
@@ -133,16 +183,12 @@ def scan_prices(date_str=None):
     codes = db.get_active_codes()
     log(f"현재가 수집 시작: {len(codes)}종목")
 
+    results = collect_parallel(codes, fetch_kr_price_detail, "현재가")
+    errors = len(codes) - len(results)
+
     price_rows = []
     val_rows = []
-    errors = 0
-
-    for i, code in enumerate(codes):
-        output = fetch_kr_price_detail(code)
-        if not output:
-            errors += 1
-            continue
-
+    for code, output in results.items():
         price_rows.append({
             "code": code,
             "date": date_str,
@@ -166,9 +212,6 @@ def scan_prices(date_str=None):
             "foreign_ratio": _safe_float(output.get("hts_frgn_ehrt")),
         })
 
-        if (i + 1) % 500 == 0:
-            log(f"  현재가 {i+1}/{len(codes)} ({errors} errors)")
-
     n1 = db.upsert_daily_prices(price_rows)
     n2 = db.upsert_daily_valuations(val_rows)
     log(f"현재가 완료: {n1} prices, {n2} valuations ({errors} errors)")
@@ -182,15 +225,11 @@ def scan_investor_flow():
     codes = db.get_active_codes()
     log(f"수급 수집 시작: {len(codes)}종목")
 
+    results = collect_parallel(codes, fetch_kr_investor, "수급")
+    errors = len(codes) - len(results)
+
     all_rows = []
-    errors = 0
-
-    for i, code in enumerate(codes):
-        data = fetch_kr_investor(code)
-        if not data:
-            errors += 1
-            continue
-
+    for code, data in results.items():
         for item in data:
             date_raw = item.get("stck_bsop_date", "")
             if not date_raw or len(date_raw) != 8:
@@ -210,9 +249,6 @@ def scan_investor_flow():
                 "institution_net": int(orgn) if orgn else 0,
                 "individual_net": int(prsn) if prsn else 0,
             })
-
-        if (i + 1) % 500 == 0:
-            log(f"  수급 {i+1}/{len(codes)} ({errors} errors)")
 
     n = db.insert_investor_flow(all_rows)
     log(f"수급 완료: {n}건 ({errors} errors)")
