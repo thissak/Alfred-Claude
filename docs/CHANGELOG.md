@@ -1,10 +1,21 @@
 # Alf — Changelog
 
+## 2026-05-24
+
+- [feat] 데이터 무결성 레이어 — heartbeat가 '프로세스 생존'만 보고 실제 데이터 유입은 검증 못 해, collector 전량실패에도 'ok'였던 silent failure 해소. `daemons/freshness_monitor.py` 신규(`com.alf.freshness`) — `daily_prices`∪`daily_indices`로 거래일 완전성·신선도를 collector와 독립 검증, gap/stale 시 iMessage 알림 + `backfill --since` 자동복구 (ADR 017)
+- [refactor] 정직한 heartbeat — `MonitorBase.check()`가 `(status, detail)` 튜플 반환 지원(기존 str 데몬 비파괴 호환), collector는 수집 0건/기대종목 80% 미만이면 heartbeat `error` (ADR 017)
+- [feat] KIS 일봉 과거 백필 (`scripts/backfill_kis_history.py`) — FHKST03010100 수정주가, 100행/콜 페이지네이션으로 daily_prices를 **상장일/최대 1990년까지** 확장 (4.01M→13.79M행, ~30년). KIS 콜은 latency(~4.6초)라 **스레드풀+전역 레이트게이트(~11 RPS)+재시도로 병렬화** → 순차 며칠 → ~2.5h. 멱등 upsert + 체크포인트 재개. `--since`로 최근 갭 보충 (ADR 016)
+- [perf] collector 병렬화 + 재시도 — `scan_prices`/`scan_investor_flow`를 `collect_parallel`(스레드풀+레이트게이트+5회 재시도)로 전환. ConnectionError 한 번에 그날 수집이 통째로 끊겨 최근 거래일(5/13·15·21·22) 누락되던 문제 해결. 일일 수집 ~6.6시간 순차 → 수십 분 (ADR 016)
+- [fix] 차트 API 결손행 처리 — 옛 KIS 데이터의 시가/고저=0(종가만 존재) 행을 종가로 플랫화(DB 69k행 정정) + 종가≤0 행은 API에서 제외해 캔들 깨짐 방지
+
 ## 2026-05-23
 
 - [feat] stock-chart 주식 차트 웹 (`apps/stock-chart/`) — stdlib http.server + Lightweight Charts v5. 단일종목 캔들 + 거래량(별도 패널) + 이평선 5/20/60/120 + 호버 OHLCV 레전드 + 크로스헤어 날짜. `src/market_db.py` 재사용으로 `/api/ohlcv`·`/api/search` 2개 엔드포인트만 노출 (market-api 임의 SELECT는 비노출). 네이버 증권 차트 레이아웃 모사
 - [feat] `daemon_ctl.py`에 stock-chart 데몬 등록 (port 8002, 맥미니 로컬 market.db 직접 조회)
 - [infra] `stock.goldenlabs.dev` 비공개 배포 — 기존 `vw-stylelab` cloudflared 터널에 ingress 1줄 + CF DNS proxied CNAME + Cloudflare Access(OTP, thissak@gmail.com만, 365일). 맥미니 올인원(A안), 새 인프라 0. Access→DNS 순서로 공개 노출 0 보장. notes(goldenLabs ADR 001) 패턴 복제 (ADR 015)
+- [feat] stock-chart 관심그룹 즐겨찾기 — 좌측 사이드바(그룹별 종목+시세, 클릭→차트, ★추가/+그룹/삭제). 서버 저장(`data/watchgroups.json`, `/api/groups` GET[시세포함]/PUT)로 다기기 동기화. `watchlist.yaml` 카테고리에서 초기 시드
+- [feat] stock-chart 기본 차트 범위 1Y → 전체(보유 전 기간). flexbox+autoSize로 시간축이 창 크기 무관 하단 항상 노출(잘림 해결)
+- [fix] stock-chart 코드리뷰 반영 — 조용한 실패 제거: 시드 예외 stderr 로깅, do_GET/PUT `traceback.print_exc()`, PUT `groups` 키 가드(빈 본문이 전체 삭제하던 footgun 차단), 프론트 저장 실패 alert
 
 ## 2026-04-09
 

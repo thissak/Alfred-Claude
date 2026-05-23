@@ -93,5 +93,10 @@
 - [x] 1단계 MVP — 단일종목 캔들/거래량/이평선(5/20/60/120) + 호버 OHLCV (Lightweight Charts v5)
 - [x] 차트 API (`apps/stock-chart/server.py`) — `market_db.py` 재사용, OHLCV·종목검색
 - [x] 맥미니 배포 — daemon_ctl `stock-chart`(8002) + cloudflared 터널 ingress + CF Access(OTP) (ADR 015)
-- [ ] OTP 로그인 후 실사용 검증 (사용자)
+- [x] OTP 로그인 + 차트 실사용 검증 완료
+- [x] 관심그룹 즐겨찾기 — 좌측 사이드바 + 서버저장(`data/watchgroups.json`) + `watchlist.yaml` 시드
+- [x] 기본 차트 범위 전체(보유 ~30년)
+- [x] KIS 과거 백필 — 상장일/1990까지 (daily_prices 4.01M→13.79M행), 병렬 (ADR 016)
+- [x] collector 병렬화 + 재시도 — 일일 수집 6.6h→수십분, 누락 재발 방지 (ADR 016)
+- [x] 데이터 무결성 — 정직한 heartbeat(0건/저조 error) + freshness 독립 검사기(gap/stale 알림+자동복구), `com.alf.freshness` (ADR 017)
 - [ ] 2단계 — 두 종목 겹쳐보기 (수익률 정규화)
