@@ -94,9 +94,9 @@
   <div class="ranges" id="ranges">
     <button data-r="3m">3M</button>
     <button data-r="6m">6M</button>
-    <button data-r="1y" class="on">1Y</button>
+    <button data-r="1y">1Y</button>
     <button data-r="3y">3Y</button>
-    <button data-r="all">전체</button>
+    <button data-r="all" class="on">전체</button>
   </div>
 </header>
 
@@ -177,7 +177,7 @@ function sma(data, n) {
   return out;
 }
 
-let curCode = '005930', curRange = '1y';
+let curCode = '005930', curRange = 'all';
 let O = [], barMap = {}, maMap = { 5:{}, 20:{}, 60:{}, 120:{} };
 
 function renderLegend(time) {
@@ -357,7 +357,7 @@ document.getElementById('star').addEventListener('click', () => {
   if (pick && names.includes(pick)) addToGroup(pick);
 });
 
-load('005930', '1y');
+load('005930', 'all');
 loadGroups();
 </script>
 </body>
