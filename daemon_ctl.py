@@ -54,6 +54,11 @@ DAEMONS = {
         "args": [],
         "desc": "market.db 읽기 전용 HTTP API (port 8001)",
     },
+    "stock-chart": {
+        "script": "apps/stock-chart/server.py",
+        "args": [],
+        "desc": "주식 차트 웹 + 차트 API (port 8002)",
+    },
     "buy-alert": {
         "script": "daemons/buy_alert_daemon.py",
         "args": [],

@@ -15,3 +15,5 @@ __pycache__/
 /apps/com.alf.*.app/
 /apps/trading-journal/.next/
 /apps/trading-journal/node_modules/
+.playwright-mcp/
+/stock-mvp-*.png
