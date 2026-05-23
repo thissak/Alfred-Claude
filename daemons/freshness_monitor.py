@@ -48,27 +48,33 @@ class FreshnessMonitor(MonitorBase):
     def check(self):
         lookback = int(os.environ.get("FRESHNESS_LOOKBACK", "10"))
 
-        # 거래일 오라클: daily_indices(KOSPI)의 최근 날짜들
+        # 거래일 후보 = 최근 daily_prices 날짜 ∪ daily_indices 날짜.
+        # 둘 중 하나라도 있으면 거래일로 본다 — 부분수집일은 prices에 적은 행으로,
+        # 지수만 들어온 날은 indices에 잡혀서, collector가 어느 쪽을 놓쳐도 감지된다.
+        price_dates = [r["date"] for r in db._query(
+            "SELECT DISTINCT date FROM daily_prices ORDER BY date DESC LIMIT ?", (lookback,))]
         idx_dates = [r["date"] for r in db._query(
             "SELECT DISTINCT date FROM daily_indices WHERE code='0001' "
             "ORDER BY date DESC LIMIT ?", (lookback,))]
-        if not idx_dates:
-            return ("error", "daily_indices 비어있음")
+        if not price_dates and not idx_dates:
+            return ("error", "daily_prices/indices 비어있음")
+        cand = sorted(set(price_dates) | set(idx_dates), reverse=True)[:lookback]
 
         # 날짜별 daily_prices 행수
         counts = {r["date"]: r["n"] for r in db._query(
             "SELECT date, COUNT(*) n FROM daily_prices WHERE date>=? GROUP BY date",
-            (idx_dates[-1],))}
+            (cand[-1],))}
 
-        # 완전성 기준 = 최근 정상일 행수 중앙값 × 0.9
-        vals = [counts.get(d, 0) for d in idx_dates]
+        # 완전성 기준 = 후보일 행수 중앙값 × 0.9
+        vals = [counts.get(d, 0) for d in cand]
         med = median([v for v in vals if v]) if any(vals) else 0
-        gaps = [(d, counts.get(d, 0)) for d in idx_dates
+        gaps = [(d, counts.get(d, 0)) for d in cand
                 if med and counts.get(d, 0) < med * 0.9]
 
-        # 신선도: prices 최신일이 indices 최신일보다 뒤처짐
-        latest_price = db._query("SELECT MAX(date) m FROM daily_prices")[0]["m"]
-        stale = bool(latest_price) and latest_price < idx_dates[0]
+        # 신선도: prices 최신일이 거래일 최신보다 뒤처짐 (지수만 들어온 경우 등)
+        latest_price = price_dates[0] if price_dates else None
+        latest_trade = cand[0]
+        stale = bool(latest_price) and latest_price < latest_trade
 
         if not gaps and not stale:
             self._transition("ok", f"정상 (최신 {latest_price}, 중앙값 {int(med)}행)")
@@ -76,7 +82,7 @@ class FreshnessMonitor(MonitorBase):
 
         parts = []
         if stale:
-            parts.append(f"stale(prices {latest_price} < idx {idx_dates[0]})")
+            parts.append(f"stale(prices {latest_price} < 거래일 {latest_trade})")
         if gaps:
             g = ", ".join(f"{d}:{n}" for d, n in gaps[:5])
             parts.append(f"부분수집 {len(gaps)}일 [{g}] (정상 {int(med)})")
@@ -85,7 +91,7 @@ class FreshnessMonitor(MonitorBase):
         first_bad = self._transition("bad", detail)
         if first_bad:
             self.write_outbox(f"⚠️ 데이터 신선도 경보\n{detail}")
-            self._heal(gaps, stale, idx_dates)
+            self._heal(gaps, stale, latest_trade)
         return ("error", detail)
 
     # ── 상태 전이 (알림 중복 방지) ──
@@ -110,7 +116,7 @@ class FreshnessMonitor(MonitorBase):
             return {}
 
     # ── 자동복구 (gap 최초 감지 시 1회) ──
-    def _heal(self, gaps, stale, idx_dates):
+    def _heal(self, gaps, stale, latest_trade):
         if os.environ.get("FRESHNESS_AUTOHEAL", "1") != "1":
             return
         hm = datetime.now().hour * 100 + datetime.now().minute
@@ -122,7 +128,7 @@ class FreshnessMonitor(MonitorBase):
             self.log("백필 이미 실행 중 — 자동복구 보류")
             return
 
-        dates = [d for d, _ in gaps] + ([idx_dates[0]] if stale else [])
+        dates = [d for d, _ in gaps] + ([latest_trade] if stale else [])
         since = min(dates).replace("-", "")
         self.log(f"자동복구 시작: backfill --since {since}")
         heal_log = open(os.path.join(ROOT, "logs", "freshness_heal.log"), "a")
