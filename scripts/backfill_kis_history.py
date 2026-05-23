@@ -145,20 +145,26 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pilot", action="store_true")
     ap.add_argument("--floor", default=DEFAULT_FLOOR)
+    ap.add_argument("--since", help="최근 갭 채움: 이 날짜~오늘 (YYYYMMDD). 체크포인트 무시")
     args = ap.parse_args()
 
+    recent = bool(args.since)
+    floor = args.since if recent else args.floor
     mins = {r["code"]: r["m"] for r in
             db._query("SELECT code, MIN(date) m FROM daily_prices GROUP BY code")}
     if args.pilot:
         codes, done = PILOT, set()
+    elif recent:
+        codes, done = sorted(mins.keys()), set()  # 최근 갭은 전 종목, 체크포인트 무시
     else:
         codes = sorted(mins.keys())
         try:
             done = set(json.load(open(CKPT)))
         except Exception:
             done = set()
-    todo = [c for c in codes if c not in done]
-    log(f"시작(병렬): {len(todo)}/{len(codes)}종목, RATE={RATE}/s, WORKERS={WORKERS}, floor={args.floor}")
+    todo = codes if recent else [c for c in codes if c not in done]
+    log(f"시작(병렬,{'recent' if recent else 'full'}): {len(todo)}/{len(codes)}종목, "
+        f"RATE={RATE}/s, WORKERS={WORKERS}, floor={floor}")
 
     total = [0]
     errors = [0]
@@ -166,14 +172,15 @@ def main():
     tlock = threading.Lock()
 
     def work(code):
-        added, ok = backfill_code(code, mins.get(code), args.floor)
+        md = None if recent else mins.get(code)  # recent면 end=today부터 [since,today]
+        added, ok = backfill_code(code, md, floor)
         with tlock:
             total[0] += added
             n[0] += 1
             if not ok:
                 errors[0] += 1
             cur = n[0]
-        if ok and not args.pilot:
+        if ok and not args.pilot and not recent:
             mark_done(done, code)
         if args.pilot:
             log(f"  {code} +{added}행 (ok={ok})")
@@ -183,7 +190,7 @@ def main():
     with cf.ThreadPoolExecutor(max_workers=WORKERS) as ex:
         list(ex.map(work, todo))
 
-    if not args.pilot:
+    if not args.pilot and not recent:
         json.dump(sorted(done), open(CKPT, "w"))
     log(f"=== 완료: +{total[0]:,}행, {errors[0]}에러, 완료 {len(done)}종목 ===")
 
