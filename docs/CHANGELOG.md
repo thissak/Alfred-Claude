@@ -1,5 +1,11 @@
 # Alf — Changelog
 
+## 2026-05-23
+
+- [feat] stock-chart 주식 차트 웹 (`apps/stock-chart/`) — stdlib http.server + Lightweight Charts v5. 단일종목 캔들 + 거래량(별도 패널) + 이평선 5/20/60/120 + 호버 OHLCV 레전드 + 크로스헤어 날짜. `src/market_db.py` 재사용으로 `/api/ohlcv`·`/api/search` 2개 엔드포인트만 노출 (market-api 임의 SELECT는 비노출). 네이버 증권 차트 레이아웃 모사
+- [feat] `daemon_ctl.py`에 stock-chart 데몬 등록 (port 8002, 맥미니 로컬 market.db 직접 조회)
+- [infra] `stock.goldenlabs.dev` 비공개 배포 — 기존 `vw-stylelab` cloudflared 터널에 ingress 1줄 + CF DNS proxied CNAME + Cloudflare Access(OTP, thissak@gmail.com만, 365일). 맥미니 올인원(A안), 새 인프라 0. Access→DNS 순서로 공개 노출 0 보장. notes(goldenLabs ADR 001) 패턴 복제 (ADR 015)
+
 ## 2026-04-09
 
 - [refactor] MonitorBase 통합 아키텍처 (`src/monitor_base.py`) — 7개 모니터링 데몬의 공통 보일러플레이트(daemon loop, heartbeat, outbox, claude -p 호출, 에러 처리, 시간 게이트)를 베이스 클래스로 추출. 서브클래스는 `check()` 하나만 구현. 새 모니터 추가 시 파일 1개 + daemon_ctl 등록 1줄로 확장 가능 (ADR 014)

@@ -88,3 +88,10 @@
 - [ ] 장 마감 후 cron 연동 (KR 16:00, US 06:00)
 - [ ] 결과 출력 (data/screener.json → Vercel or Alf 연동)
 - [x] `alf.py`, `brain.py` 레거시 제거
+
+## stock.goldenlabs.dev (주식 차트 사이트)
+- [x] 1단계 MVP — 단일종목 캔들/거래량/이평선(5/20/60/120) + 호버 OHLCV (Lightweight Charts v5)
+- [x] 차트 API (`apps/stock-chart/server.py`) — `market_db.py` 재사용, OHLCV·종목검색
+- [x] 맥미니 배포 — daemon_ctl `stock-chart`(8002) + cloudflared 터널 ingress + CF Access(OTP) (ADR 015)
+- [ ] OTP 로그인 후 실사용 검증 (사용자)
+- [ ] 2단계 — 두 종목 겹쳐보기 (수익률 정규화)
