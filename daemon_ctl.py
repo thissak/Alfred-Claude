@@ -44,6 +44,11 @@ DAEMONS = {
         "args": [],
         "desc": "주식 데이터 일일 수집",
     },
+    "freshness": {
+        "script": "daemons/freshness_monitor.py",
+        "args": [],
+        "desc": "daily_prices 신선도/완전성 독립 검사 + 자동복구",
+    },
     "trump": {
         "script": "daemons/trump_monitor.py",
         "args": [],

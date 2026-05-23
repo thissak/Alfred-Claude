@@ -458,16 +458,17 @@ def scan_news(date_str=None):
 # ── 일일 수집 오케스트레이션 ────────────────────────────
 
 def run_daily_collection():
-    """전체 일일 수집 파이프라인 실행."""
+    """전체 일일 수집 파이프라인 실행. Returns: 단계별 건수 dict."""
     date_str = datetime.now().strftime("%Y-%m-%d")
     log(f"=== 일일 수집 시작 ({date_str}) ===")
 
     t0 = time.time()
 
     refresh_master()
-    scan_indices(date_str)
-    scan_prices(date_str)
-    scan_investor_flow()
+    counts = {"expected": len(db.get_active_codes())}
+    counts["indices"] = scan_indices(date_str)
+    counts["prices"] = scan_prices(date_str)
+    counts["flow"] = scan_investor_flow()
     compute_screening(date_str)
     scan_surge_alerts(date_str)
     scan_news(date_str)
@@ -487,7 +488,8 @@ def run_daily_collection():
         log(f"예측 루프 에러: {e}")
 
     elapsed = time.time() - t0
-    log(f"=== 일일 수집 완료 ({elapsed:.0f}초) ===")
+    log(f"=== 일일 수집 완료 ({elapsed:.0f}초, prices {counts.get('prices', 0)}/{counts['expected']}) ===")
+    return counts
 
 
 class CollectorDaemon(MonitorBase):
@@ -505,8 +507,13 @@ class CollectorDaemon(MonitorBase):
             self._triggered = False
         if 1545 <= hm <= 1550 and not self._triggered:
             self._triggered = True
-            run_daily_collection()
-            return "수집 완료"
+            counts = run_daily_collection()
+            n, exp = counts.get("prices", 0), counts.get("expected", 0)
+            if n == 0:
+                return ("error", "수집 0건 — 전량 실패")
+            if exp and n < exp * 0.8:
+                return ("error", f"수집 부족 {n}/{exp}")
+            return f"수집 완료 {n}/{exp}"
         return f"대기 (triggered={self._triggered})"
 
 

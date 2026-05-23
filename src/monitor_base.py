@@ -150,15 +150,17 @@ class MonitorBase:
         self.on_start()
 
         if self._run_now:
-            status = self.check()
-            beat(self.name, "ok", f"즉시 실행: {status}")
+            result = self.check()
+            status, detail = result if isinstance(result, tuple) else ("ok", result)
+            beat(self.name, status, f"즉시 실행: {detail}")
             return
 
         while True:
             try:
                 if self._in_time_window():
-                    status = self.check()
-                    beat(self.name, "ok", status or "ok")
+                    result = self.check()
+                    status, detail = result if isinstance(result, tuple) else ("ok", result)
+                    beat(self.name, status, detail or status)
                 else:
                     beat(self.name, "idle", "시간 외")
                 time.sleep(self.interval)
