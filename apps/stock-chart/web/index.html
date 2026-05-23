@@ -306,11 +306,12 @@ async function loadGroups() {
   renderSidebar();
 }
 async function saveGroups() {
-  await fetch('/api/groups', {
+  const r = await fetch('/api/groups', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ groups: GROUPS.map(g => ({ name:g.name, codes:g.stocks.map(s=>s.code) })) }),
   });
-  await loadGroups();  // 시세 재조회
+  if (!r.ok) alert('관심그룹 저장 실패 — 다시 시도해 주세요');
+  await loadGroups();  // 서버 상태로 갱신 (실패 시 변경 복원)
 }
 function addToGroup(gname) {
   const g = GROUPS.find(x => x.name === gname); if (!g) return;

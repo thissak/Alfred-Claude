@@ -13,6 +13,7 @@ stdlib http.server 기반 (market_api.py와 동일 스타일, 의존성 0).
 import json
 import os
 import sys
+import traceback
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -82,7 +83,8 @@ def _seed_groups_from_yaml():
             {"name": name, "codes": [it["code"] for it in items]}
             for name, items in (d.get("categories") or {}).items()
         ]
-    except Exception:
+    except Exception as e:
+        print(f"[seed] watchlist.yaml 로드 실패 — 빈 그룹으로 시작: {e}", file=sys.stderr)
         return []
 
 
@@ -185,6 +187,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(WEB_DIR / "index.html", "text/html; charset=utf-8")
             self.send_error(404)
         except Exception as e:
+            traceback.print_exc()
             self._json({"error": str(e)}, 500)
 
     def do_PUT(self):
@@ -193,10 +196,13 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/groups":
                 length = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(length) or b"{}")
+                if "groups" not in body:
+                    return self._json({"error": "groups required"}, 400)
                 save_groups(body)
                 return self._json({"ok": True})
             self.send_error(404)
         except Exception as e:
+            traceback.print_exc()
             self._json({"error": str(e)}, 500)
 
 
