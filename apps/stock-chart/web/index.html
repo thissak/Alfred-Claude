@@ -16,14 +16,14 @@
          display:flex; flex-direction:column;
          font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif; }
   header { flex:0 0 auto; display:flex; align-items:center; gap:16px; padding:12px 18px;
-           border-bottom:1px solid var(--line); background:var(--panel); position:relative; }
+           border-bottom:1px solid var(--line); background:var(--panel); position:relative; z-index:10; }
   .brand { font-weight:700; color:#e6b450; letter-spacing:.5px; }
   .search-wrap { position:relative; }
   #search { width:240px; padding:8px 12px; background:#0e1116; border:1px solid var(--line);
             border-radius:8px; color:var(--text); font-size:14px; outline:none; }
   #search:focus { border-color:#e6b450; }
   #results { position:absolute; top:40px; left:0; width:280px; background:var(--panel);
-             border:1px solid var(--line); border-radius:8px; overflow:hidden; z-index:20;
+             border:1px solid var(--line); border-radius:8px; overflow:hidden; z-index:30;
              box-shadow:0 8px 24px rgba(0,0,0,.4); display:none; }
   #results div { padding:9px 12px; cursor:pointer; font-size:14px; display:flex; justify-content:space-between; }
   #results div:hover { background:#1f2630; }
@@ -31,12 +31,45 @@
   .quote { display:flex; align-items:baseline; gap:8px; }
   .quote .name { font-size:18px; font-weight:700; }
   .quote .code { color:var(--dim); font-size:13px; }
+  #star { cursor:pointer; color:var(--dim); border:1px solid var(--line); background:#0e1116;
+          border-radius:6px; padding:5px 9px; font-size:13px; }
+  #star:hover { color:#e6b450; border-color:#e6b450; }
   .ranges { margin-left:auto; display:flex; gap:6px; }
   .ranges button { padding:6px 12px; background:#0e1116; border:1px solid var(--line);
                    color:var(--dim); border-radius:6px; cursor:pointer; font-size:13px; }
   .ranges button.on { background:#e6b450; color:#0e1116; border-color:#e6b450; font-weight:600; }
-  #chart { flex:1 1 auto; min-height:0; width:100%; }
-  .legend { position:absolute; top:66px; left:24px; z-index:5; pointer-events:none;
+
+  #main { flex:1 1 auto; display:flex; min-height:0; }
+  /* 좌측 관심그룹 사이드바 */
+  #sidebar { width:260px; flex:0 0 auto; border-right:1px solid var(--line); background:var(--panel);
+             overflow-y:auto; }
+  .sb-head { display:flex; align-items:center; justify-content:space-between; padding:12px 14px 8px; }
+  .sb-head b { font-size:14px; }
+  .sb-new { cursor:pointer; color:var(--dim); font-size:12px; border:1px solid var(--line);
+            border-radius:6px; padding:3px 8px; background:#0e1116; }
+  .sb-new:hover { color:#e6b450; border-color:#e6b450; }
+  .grp { border-top:1px solid var(--line); }
+  .grp-head { display:flex; align-items:center; justify-content:space-between; padding:8px 14px 4px; }
+  .grp-head .gname { font-weight:600; font-size:13px; }
+  .grp-head .gcount { color:var(--dim); font-weight:400; font-size:12px; margin-left:3px; }
+  .grp-head .gact { display:flex; gap:9px; opacity:0; color:var(--dim); font-size:13px; }
+  .grp:hover .grp-head .gact { opacity:1; }
+  .grp-head .gact span { cursor:pointer; }
+  .grp-head .gact span:hover { color:#e6b450; }
+  .stk { display:flex; align-items:center; justify-content:space-between; gap:6px;
+         padding:5px 14px; cursor:pointer; font-size:13px; }
+  .stk:hover { background:#1f2630; }
+  .stk .sn { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+  .stk.active .sn { color:#e6b450; font-weight:600; }
+  .stk .sr { font-variant-numeric:tabular-nums; white-space:nowrap; font-size:12px; }
+  .stk .sr .rt { margin-left:5px; }
+  .stk .rm { opacity:0; color:var(--dim); width:12px; text-align:center; }
+  .stk:hover .rm { opacity:1; }
+  .grp-empty { padding:4px 14px 8px; color:var(--dim); font-size:12px; }
+
+  #chartwrap { flex:1 1 auto; position:relative; min-width:0; }
+  #chart { width:100%; height:100%; }
+  .legend { position:absolute; top:8px; left:14px; z-index:5; pointer-events:none;
             font-size:13px; line-height:1.65; font-variant-numeric:tabular-nums; }
   .legend .ohlc { font-weight:600; }
   .legend .ohlc .lbl { color:var(--dim); font-weight:400; margin:0 2px 0 9px; }
@@ -57,6 +90,7 @@
     <div id="results"></div>
   </div>
   <div class="quote" id="quote"></div>
+  <button id="star" title="현재 종목을 그룹에 추가">★ 추가</button>
   <div class="ranges" id="ranges">
     <button data-r="3m">3M</button>
     <button data-r="6m">6M</button>
@@ -65,23 +99,33 @@
     <button data-r="all">전체</button>
   </div>
 </header>
-<div class="legend" id="legend">
-  <div class="ohlc" id="ohlc"></div>
-  <div class="ma-head">이동평균<span class="m5">5</span><span class="m20">20</span><span class="m60">60</span><span class="m120">120</span></div>
-  <div class="ma-vals">
-    <span class="m5">MA1 <b id="ma5v">-</b></span>
-    <span class="m20">MA2 <b id="ma20v">-</b></span>
-    <span class="m60">MA3 <b id="ma60v">-</b></span>
-    <span class="m120">MA4 <b id="ma120v">-</b></span>
+
+<div id="main">
+  <aside id="sidebar">
+    <div class="sb-head"><b>관심그룹</b><span class="sb-new" id="newgroup">+ 그룹</span></div>
+    <div id="groups"></div>
+  </aside>
+  <div id="chartwrap">
+    <div class="legend" id="legend">
+      <div class="ohlc" id="ohlc"></div>
+      <div class="ma-head">이동평균<span class="m5">5</span><span class="m20">20</span><span class="m60">60</span><span class="m120">120</span></div>
+      <div class="ma-vals">
+        <span class="m5">MA1 <b id="ma5v">-</b></span>
+        <span class="m20">MA2 <b id="ma20v">-</b></span>
+        <span class="m60">MA3 <b id="ma60v">-</b></span>
+        <span class="m120">MA4 <b id="ma120v">-</b></span>
+      </div>
+    </div>
+    <div id="chart"></div>
   </div>
 </div>
-<div id="chart"></div>
 
 <script>
 const { createChart, CandlestickSeries, HistogramSeries, LineSeries, CrosshairMode } = LightweightCharts;
 const UP = '#e0455b', DOWN = '#3b82f6';
 const MA_COLOR = { 5:'#22c55e', 20:'#ef5350', 60:'#f59e0b', 120:'#a855f7' };
 const fmt = n => Math.round(n).toLocaleString('ko-KR');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 function timeKey(t) {
   if (!t) return null;
@@ -91,7 +135,7 @@ function timeKey(t) {
 }
 
 const chart = createChart(document.getElementById('chart'), {
-  autoSize: true,                                              // 컨테이너 크기에 자동 맞춤 (시간축 항상 하단 노출)
+  autoSize: true,
   layout: {
     background:{color:'#0e1116'}, textColor:'#c9d1d9',
     panes: { separatorColor:'#222b36', separatorHoverColor:'#2f3a47', enableResize:true },
@@ -102,12 +146,11 @@ const chart = createChart(document.getElementById('chart'), {
   crosshair: { mode: CrosshairMode.Normal },
   localization: {
     locale: 'ko-KR',
-    timeFormatter: t => timeKey(t) || '',                      // 크로스헤어 날짜 라벨
+    timeFormatter: t => timeKey(t) || '',
     priceFormatter: p => Math.round(p).toLocaleString('ko-KR'),
   },
 });
 
-// pane 0: 캔들 + 이동평균
 const candle = chart.addSeries(CandlestickSeries, {
   upColor:UP, downColor:DOWN, borderUpColor:UP, borderDownColor:DOWN,
   wickUpColor:UP, wickDownColor:DOWN,
@@ -118,13 +161,11 @@ for (const n of [5,20,60,120]) {
     { color:MA_COLOR[n], lineWidth:1, priceLineVisible:false, lastValueVisible:false,
       crosshairMarkerVisible:false }, 0);
 }
-
-// pane 1: 거래량 (별도 패널 → 그 아래에 공유 날짜축)
 chart.addPane();
 const volume = chart.addSeries(HistogramSeries, { priceFormat:{type:'volume'}, priceLineVisible:false }, 1);
 const panes = chart.panes();
-panes[0].setStretchFactor(4);   // 가격 ~80%
-panes[1].setStretchFactor(1);   // 거래량 ~20%
+panes[0].setStretchFactor(4);
+panes[1].setStretchFactor(1);
 
 function sma(data, n) {
   const out = []; let sum = 0;
@@ -166,9 +207,10 @@ async function load(code, range) {
   const d = await r.json();
   O = d.ohlcv || [];
   const qEl = document.getElementById('quote');
+  renderSidebar();  // active 하이라이트 갱신
 
   if (!O.length) {
-    qEl.innerHTML = `<span class="name">${d.name||code}</span><span class="code">${code} · 데이터 없음</span>`;
+    qEl.innerHTML = `<span class="name">${esc(d.name||code)}</span><span class="code">${code} · 데이터 없음</span>`;
     candle.setData([]); volume.setData([]); for (const n in maSeries) maSeries[n].setData([]);
     document.getElementById('ohlc').innerHTML = ''; return;
   }
@@ -196,22 +238,23 @@ async function load(code, range) {
   const cls = last.chg > 0 ? 'up' : last.chg < 0 ? 'down' : 'flat';
   const sign = last.chg > 0 ? '▲' : last.chg < 0 ? '▼' : '';
   qEl.innerHTML =
-    `<span class="name">${d.name}</span><span class="code">${code}</span>` +
+    `<span class="name">${esc(d.name)}</span><span class="code">${code}</span>` +
     `<span class="${cls}" style="font-size:18px;font-weight:700;margin-left:6px">${fmt(last.close)}</span>` +
     `<span class="${cls}" style="font-weight:600">${sign}${fmt(Math.abs(last.chg))} (${last.pct.toFixed(2)}%)</span>`;
   renderLegend(null);
 }
 
+// ── 종목 검색 ──
 const input = document.getElementById('search'), results = document.getElementById('results');
-let t;
+let st;
 input.addEventListener('input', () => {
-  clearTimeout(t);
-  t = setTimeout(async () => {
+  clearTimeout(st);
+  st = setTimeout(async () => {
     const q = input.value.trim();
     if (!q) { results.style.display='none'; return; }
     const rows = await (await fetch(`/api/search?q=${encodeURIComponent(q)}`)).json();
     results.innerHTML = rows.map(x =>
-      `<div data-code="${x.code}"><span>${x.name}</span><span class="code">${x.code} · ${x.market}</span></div>`).join('');
+      `<div data-code="${x.code}"><span>${esc(x.name)}</span><span class="code">${x.code} · ${x.market}</span></div>`).join('');
     results.style.display = rows.length ? 'block' : 'none';
   }, 200);
 });
@@ -222,6 +265,7 @@ results.addEventListener('click', e => {
 });
 document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) results.style.display='none'; });
 
+// ── 기간 토글 ──
 document.getElementById('ranges').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   document.querySelectorAll('#ranges button').forEach(x => x.classList.remove('on'));
@@ -229,7 +273,91 @@ document.getElementById('ranges').addEventListener('click', e => {
   load(curCode, b.dataset.r);
 });
 
+// ── 관심그룹 ──
+let GROUPS = [];
+
+function renderSidebar() {
+  const el = document.getElementById('groups');
+  el.innerHTML = GROUPS.map(g => `
+    <div class="grp" data-group="${esc(g.name)}">
+      <div class="grp-head">
+        <span><span class="gname">${esc(g.name)}</span><span class="gcount">${g.stocks.length}</span></span>
+        <span class="gact">
+          <span data-action="add" title="현재 종목 추가">＋</span>
+          <span data-action="delgroup" title="그룹 삭제">✕</span>
+        </span>
+      </div>
+      ${g.stocks.length ? g.stocks.map(s => {
+        const cls = s.change_rate > 0 ? 'up' : s.change_rate < 0 ? 'down' : 'flat';
+        const sign = s.change_rate > 0 ? '+' : '';
+        const rate = s.close == null ? '-' : `${sign}${s.change_rate.toFixed(2)}%`;
+        const price = s.close == null ? '-' : s.close.toLocaleString('ko-KR');
+        return `<div class="stk ${s.code===curCode?'active':''}" data-action="load" data-code="${s.code}">
+          <span class="sn">${esc(s.name)}</span>
+          <span class="sr ${cls}">${price}<span class="rt">${rate}</span></span>
+          <span class="rm" data-action="rmstock" data-code="${s.code}" title="제거">×</span>
+        </div>`;
+      }).join('') : '<div class="grp-empty">비어있음 — ★ 추가로 담기</div>'}
+    </div>`).join('');
+}
+
+async function loadGroups() {
+  GROUPS = ((await (await fetch('/api/groups')).json()).groups) || [];
+  renderSidebar();
+}
+async function saveGroups() {
+  await fetch('/api/groups', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groups: GROUPS.map(g => ({ name:g.name, codes:g.stocks.map(s=>s.code) })) }),
+  });
+  await loadGroups();  // 시세 재조회
+}
+function addToGroup(gname) {
+  const g = GROUPS.find(x => x.name === gname); if (!g) return;
+  if (g.stocks.some(s => s.code === curCode)) return;
+  g.stocks.push({ code: curCode });
+  saveGroups();
+}
+function removeStock(gname, code) {
+  const g = GROUPS.find(x => x.name === gname); if (!g) return;
+  g.stocks = g.stocks.filter(s => s.code !== code);
+  saveGroups();
+}
+function deleteGroup(gname) {
+  if (!confirm(`'${gname}' 그룹을 삭제할까요?`)) return;
+  GROUPS = GROUPS.filter(g => g.name !== gname);
+  saveGroups();
+}
+function newGroup() {
+  const name = (prompt('새 그룹 이름') || '').trim();
+  if (!name) return;
+  if (GROUPS.some(g => g.name === name)) { alert('이미 있는 그룹입니다'); return; }
+  GROUPS.push({ name, stocks: [] });
+  saveGroups();
+}
+
+document.getElementById('groups').addEventListener('click', e => {
+  const t = e.target.closest('[data-action]'); if (!t) return;
+  const gname = t.closest('.grp')?.dataset.group;
+  const a = t.dataset.action;
+  if (a === 'load') load(t.dataset.code, curRange);
+  else if (a === 'add') addToGroup(gname);
+  else if (a === 'rmstock') removeStock(gname, t.dataset.code);
+  else if (a === 'delgroup') deleteGroup(gname);
+});
+document.getElementById('newgroup').addEventListener('click', newGroup);
+
+// ★ 추가 — 현재 종목을 그룹에 담기 (그룹 1개면 바로, 여러개면 선택)
+document.getElementById('star').addEventListener('click', () => {
+  if (!GROUPS.length) { newGroup(); return; }
+  const names = GROUPS.map(g => g.name);
+  const pick = names.length === 1 ? names[0]
+    : (prompt(`어느 그룹에 추가?\n(${names.join(' / ')})`, names[0]) || '').trim();
+  if (pick && names.includes(pick)) addToGroup(pick);
+});
+
 load('005930', '1y');
+loadGroups();
 </script>
 </body>
 </html>

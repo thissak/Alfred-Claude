@@ -24,6 +24,9 @@ HOST = os.environ.get("STOCK_CHART_HOST", "127.0.0.1")
 PORT = int(os.environ.get("STOCK_CHART_PORT", "8002"))
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+WATCHGROUPS_PATH = PROJECT_ROOT / "data" / "watchgroups.json"
+WATCHLIST_YAML = PROJECT_ROOT / "skills" / "report" / "watchlist.yaml"
 
 # range → 거래일 수 (대략: 1개월 ≈ 21 거래일)
 RANGE_LIMIT = {"3m": 66, "6m": 132, "1y": 264, "3y": 760, "all": 100000}
@@ -68,6 +71,78 @@ def search(q):
     return rows
 
 
+# ── 관심그룹 (즐겨찾기) ──────────────────────────────────
+
+def _seed_groups_from_yaml():
+    """watchlist.yaml 카테고리 → 초기 관심그룹. 실패 시 빈 목록."""
+    try:
+        import yaml
+        d = yaml.safe_load(WATCHLIST_YAML.read_text(encoding="utf-8")) or {}
+        return [
+            {"name": name, "codes": [it["code"] for it in items]}
+            for name, items in (d.get("categories") or {}).items()
+        ]
+    except Exception:
+        return []
+
+
+def _load_groups():
+    if WATCHGROUPS_PATH.exists():
+        return json.loads(WATCHGROUPS_PATH.read_text(encoding="utf-8")).get("groups", [])
+    groups = _seed_groups_from_yaml()  # 최초 1회 시드
+    _save_groups(groups)
+    return groups
+
+
+def _save_groups(groups):
+    WATCHGROUPS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    WATCHGROUPS_PATH.write_text(
+        json.dumps({"groups": groups}, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def _quotes(codes):
+    """여러 종목의 최신 시세(종가·등락률·전일대비) 한 번에 조회."""
+    if not codes:
+        return {}
+    ph = ",".join("?" * len(codes))
+    rows = db._query(
+        f"""SELECT dp.code AS code, s.name AS name, dp.close AS close, dp.change_rate AS rate
+            FROM daily_prices dp
+            JOIN securities s ON s.code = dp.code
+            JOIN (SELECT code, MAX(date) AS d FROM daily_prices WHERE code IN ({ph}) GROUP BY code) m
+              ON m.code = dp.code AND m.d = dp.date""",
+        list(codes),
+    )
+    out = {}
+    for r in rows:
+        close, rate = r["close"], r["rate"] or 0
+        prev = close / (1 + rate / 100) if rate != -100 else close
+        out[r["code"]] = {"code": r["code"], "name": r["name"], "close": close,
+                          "change": round(close - prev), "change_rate": rate}
+    return out
+
+
+def groups_enriched():
+    """그룹 + 각 종목 최신 시세."""
+    groups = _load_groups()
+    q = _quotes([c for g in groups for c in g["codes"]])
+    return [
+        {"name": g["name"],
+         "stocks": [q.get(c, {"code": c, "name": c, "close": None, "change": 0, "change_rate": 0})
+                    for c in g["codes"]]}
+        for g in groups
+    ]
+
+
+def save_groups(body):
+    """{groups:[{name, codes:[...]}]} 저장 (name/codes만 화이트리스트)."""
+    clean = [{"name": str(g.get("name", "")).strip(),
+              "codes": [str(c) for c in (g.get("codes") or [])]}
+             for g in (body.get("groups") or [])]
+    _save_groups(clean)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # 조용히
@@ -104,8 +179,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(get_ohlcv(code, rng))
             if u.path == "/api/search":
                 return self._json(search((q.get("q") or [""])[0].strip()))
+            if u.path == "/api/groups":
+                return self._json({"groups": groups_enriched()})
             if u.path in ("/", "/index.html"):
                 return self._file(WEB_DIR / "index.html", "text/html; charset=utf-8")
+            self.send_error(404)
+        except Exception as e:
+            self._json({"error": str(e)}, 500)
+
+    def do_PUT(self):
+        u = urlparse(self.path)
+        try:
+            if u.path == "/api/groups":
+                length = int(self.headers.get("Content-Length", 0))
+                body = json.loads(self.rfile.read(length) or b"{}")
+                save_groups(body)
+                return self._json({"ok": True})
             self.send_error(404)
         except Exception as e:
             self._json({"error": str(e)}, 500)
