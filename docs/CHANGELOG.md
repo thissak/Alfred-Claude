@@ -1,5 +1,10 @@
 # Alf — Changelog
 
+## 2026-05-25
+
+- [fix] freshness 검사 사각지대 보강 — 검사기가 `daily_prices`(PyKRX 경로, 항상 최신)만 봐서 KIS 경로인 `investor_flow`/`daily_valuations`/`daily_screening`이 따로 정체돼도(5/21 ConnectionError로 5/20 정지) "정상" 판정하던 silent failure 해소. `freshness_monitor`가 보조테이블 최신일도 거래일 오라클과 비교해 stale 탐지 + `backfill_flow.py` 자동복구. `_heal_flow`는 collector 윈도우·중복·`FRESHNESS_AUTOHEAL` 가드를 기존 `_heal`과 동일하게 적용 (ADR 018)
+- [feat] `scripts/backfill_flow.py` — 수급/밸류/스크리닝 백필을 collector_daemon 함수 재사용으로 래핑(`scan_investor_flow`→`compute_valuations --start`→누락일 `compute_screening`). 자동 누락일 탐지 + 전 테이블 최신이면 KIS 스캔 없이 skip(멱등). freshness 자동복구·수동 백필 공용
+
 ## 2026-05-24
 
 - [feat] 데이터 무결성 레이어 — heartbeat가 '프로세스 생존'만 보고 실제 데이터 유입은 검증 못 해, collector 전량실패에도 'ok'였던 silent failure 해소. `daemons/freshness_monitor.py` 신규(`com.alf.freshness`) — `daily_prices`∪`daily_indices`로 거래일 완전성·신선도를 collector와 독립 검증, gap/stale 시 iMessage 알림 + `backfill --since` 자동복구 (ADR 017)

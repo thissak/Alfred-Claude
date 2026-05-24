@@ -99,4 +99,5 @@
 - [x] KIS 과거 백필 — 상장일/1990까지 (daily_prices 4.01M→13.79M행), 병렬 (ADR 016)
 - [x] collector 병렬화 + 재시도 — 일일 수집 6.6h→수십분, 누락 재발 방지 (ADR 016)
 - [x] 데이터 무결성 — 정직한 heartbeat(0건/저조 error) + freshness 독립 검사기(gap/stale 알림+자동복구), `com.alf.freshness` (ADR 017)
+- [x] freshness 보조테이블 확장 — investor_flow/screening 신선도도 검사+자동복구(`backfill_flow.py`), KIS 경로가 PyKRX와 별개로 정체되던 사각지대 해소 (ADR 018)
 - [ ] 2단계 — 두 종목 겹쳐보기 (수익률 정규화)

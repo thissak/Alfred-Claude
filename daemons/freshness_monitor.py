@@ -8,6 +8,8 @@ collector의 자기보고(heartbeat)와 무관하게 DB를 직접 읽어
   1. 완전성: 거래일(daily_indices=오라클) 각각의 daily_prices 행수가
      최근 정상일 중앙값의 90% 이상인가. 미만이면 부분수집(gap).
   2. 신선도: daily_prices 최신일이 daily_indices 최신일보다 뒤처지면 stale.
+  3. 보조테이블: investor_flow/daily_screening 최신일이 거래일 최신보다 뒤처지면
+     stale (KIS 경로가 PyKRX OHLCV와 별개로 정체되는 사각지대).
 
 동작:
   - gap/stale 발견 → iMessage 알림(상태변화 시 1회) + 자동복구(backfill --since).
@@ -76,7 +78,15 @@ class FreshnessMonitor(MonitorBase):
         latest_trade = cand[0]
         stale = bool(latest_price) and latest_price < latest_trade
 
-        if not gaps and not stale:
+        # 보조테이블 신선도 — KIS 경로(수급/스크리닝)는 daily_prices(PyKRX)와 별개라
+        # 따로 정체될 수 있다(daily_prices만 보면 못 잡는 사각지대).
+        sec_stale = {}
+        for t in ("investor_flow", "daily_screening"):
+            d = db._query(f"SELECT MAX(date) d FROM {t}")[0]["d"] or ""
+            if d and d < latest_trade:
+                sec_stale[t] = d
+
+        if not gaps and not stale and not sec_stale:
             self._transition("ok", f"정상 (최신 {latest_price}, 중앙값 {int(med)}행)")
             return f"정상 (최신 {latest_price}, 중앙값 {int(med)}행)"
 
@@ -86,12 +96,18 @@ class FreshnessMonitor(MonitorBase):
         if gaps:
             g = ", ".join(f"{d}:{n}" for d, n in gaps[:5])
             parts.append(f"부분수집 {len(gaps)}일 [{g}] (정상 {int(med)})")
+        if sec_stale:
+            s = ", ".join(f"{t} {d}" for t, d in sec_stale.items())
+            parts.append(f"보조테이블 정체 [{s}] < 거래일 {latest_trade}")
         detail = "; ".join(parts)
 
         first_bad = self._transition("bad", detail)
         if first_bad:
             self.write_outbox(f"⚠️ 데이터 신선도 경보\n{detail}")
-            self._heal(gaps, stale, latest_trade)
+            if gaps or stale:
+                self._heal(gaps, stale, latest_trade)
+            if sec_stale:
+                self._heal_flow(min(sec_stale.values()))
         return ("error", detail)
 
     # ── 상태 전이 (알림 중복 방지) ──
@@ -134,6 +150,26 @@ class FreshnessMonitor(MonitorBase):
         heal_log = open(os.path.join(ROOT, "logs", "freshness_heal.log"), "a")
         subprocess.Popen(
             ["/usr/bin/python3", os.path.join(ROOT, "scripts", "backfill_kis_history.py"),
+             "--since", since],
+            cwd=ROOT, stdout=heal_log, stderr=subprocess.STDOUT,
+        )
+
+    # ── 보조테이블(수급/밸류/스크리닝) 자동복구 ──
+    def _heal_flow(self, since):
+        if os.environ.get("FRESHNESS_AUTOHEAL", "1") != "1":
+            return
+        hm = datetime.now().hour * 100 + datetime.now().minute
+        if 1540 <= hm <= 1700:  # collector 수집 윈도우 충돌 방지
+            self.log("collector 윈도우 — flow 자동복구 보류")
+            return
+        if subprocess.run(["pgrep", "-f", "backfill_flow.py"],
+                          capture_output=True).returncode == 0:
+            self.log("flow 백필 이미 실행 중 — 자동복구 보류")
+            return
+        self.log(f"flow 자동복구 시작: backfill_flow --since {since}")
+        heal_log = open(os.path.join(ROOT, "logs", "freshness_heal.log"), "a")
+        subprocess.Popen(
+            ["/usr/bin/python3", os.path.join(ROOT, "scripts", "backfill_flow.py"),
              "--since", since],
             cwd=ROOT, stdout=heal_log, stderr=subprocess.STDOUT,
         )
