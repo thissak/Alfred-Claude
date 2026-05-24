@@ -96,6 +96,8 @@
 - [x] OTP 로그인 + 차트 실사용 검증 완료
 - [x] 관심그룹 즐겨찾기 — 좌측 사이드바 + 서버저장(`data/watchgroups.json`) + `watchlist.yaml` 시드
 - [x] 기본 차트 범위 전체(보유 ~30년)
+- [x] 후보 정리 페이지(`/notes`) + 관심그룹 — 논의 종목 티어/테마 정리, 종목→차트(`/?code=`) 링크
+- [x] 차트 범위별 다운샘플 — 일봉(≤1Y)→주봉(3Y)→월봉(전체), 전체 로딩 952KB→45KB
 - [x] KIS 과거 백필 — 상장일/1990까지 (daily_prices 4.01M→13.79M행), 병렬 (ADR 016)
 - [x] collector 병렬화 + 재시도 — 일일 수집 6.6h→수십분, 누락 재발 방지 (ADR 016)
 - [x] 데이터 무결성 — 정직한 heartbeat(0건/저조 error) + freshness 독립 검사기(gap/stale 알림+자동복구), `com.alf.freshness` (ADR 017)

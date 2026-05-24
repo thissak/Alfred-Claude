@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>후보 종목 정리 · stock.goldenlabs</title>
+<link rel="icon" href="data:," />
+<style>
+  :root { --bg:#0e1116; --panel:#161b22; --line:#222b36; --text:#c9d1d9; --dim:#7d8590;
+          --up:#e0455b; --down:#3b82f6; --gold:#e6b450; --grn:#22c55e; --red:#ef5350; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); min-height:100vh;
+         font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:12px 18px;
+           border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:10; }
+  .brand { font-weight:700; color:var(--gold); letter-spacing:.5px; }
+  h1 { font-size:15px; font-weight:600; margin:0; color:var(--text); }
+  .navlink { color:var(--dim); text-decoration:none; font-size:13px; border:1px solid var(--line);
+             border-radius:6px; padding:5px 10px; }
+  .navlink:hover { color:var(--gold); border-color:var(--gold); }
+  main { max-width:1040px; margin:0 auto; padding:20px 18px 60px; }
+  .intro { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+           padding:14px 16px; font-size:13px; line-height:1.7; color:var(--dim); margin-bottom:22px; }
+  .intro b { color:var(--text); }
+  .intro .axis { color:var(--gold); }
+  .tier { margin-bottom:26px; }
+  .tier-h { font-size:15px; font-weight:700; margin:0 0 2px; }
+  .tier-d { font-size:12px; color:var(--dim); margin:0 0 8px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:500; font-size:12px; white-space:nowrap; }
+  td.c-name a { color:var(--gold); text-decoration:none; font-weight:600; }
+  td.c-name a:hover { text-decoration:underline; }
+  td.c-name .code { color:var(--dim); font-size:11px; font-weight:400; margin-left:6px; }
+  td.c-theme { color:var(--text); white-space:nowrap; }
+  td.c-nps { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .nps-pos { color:var(--grn); }
+  .k-in { color:var(--grn); white-space:nowrap; }
+  .k-out { color:var(--red); white-space:nowrap; }
+  .k-na { color:var(--dim); }
+  td.c-memo { color:var(--dim); line-height:1.5; }
+  td.c-memo .warn { color:var(--red); }
+  .wrap { overflow-x:auto; }
+  .foot { color:var(--dim); font-size:12px; margin-top:24px; line-height:1.7; border-top:1px solid var(--line); padding-top:14px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">stock.goldenlabs</span>
+  <a class="navlink" href="/">← 차트</a>
+  <h1>후보 종목 정리</h1>
+</header>
+
+<main>
+  <div class="intro">
+    <b>3축 스크리닝 프레임</b> — <span class="axis">① 국민연금 보유</span>(DART 지분공시, 스마트머니 액티브)
+    · <span class="axis">② 코스닥150 편입</span>(6/12 ETF 패시브 수급)
+    · <span class="axis">③ 정책·차기 테마</span>(반도체 베이스 / 로봇·우주·바이오)<br>
+    종목명을 누르면 차트로 이동합니다. <b>수급은 2026-05-22 기준</b>(외인·기관 최근 15거래일 순매수 추세), 분석 2026-05-25.
+  </div>
+  <div id="tiers"></div>
+  <div class="foot">
+    수급 약어 — 외인/기관 순매수(억원), 가속=최근5일&gt;이전10일, 전환=매도→매수, 둔화=최근 외인 이탈.<br>
+    ⚠ 본 페이지는 수급·정책·테마 시그널 정리이며 투자 권유가 아닙니다. 펀더멘털·실적은 별도 확인 필요.
+  </div>
+</main>
+
+<script>
+const TIERS = [
+  { h:'🥇 핵심 — 다중 촉매 수렴', d:'수급·정책·테마가 겹치는 최선호', rows:[
+    {n:'브이엠',c:'089970',t:'반도체 장비',nps:'7.05%',k:'in',m:'외인 <b>가속매집</b>(+451억, 311vs139). 4박자 정렬 1순위'},
+    {n:'원익홀딩스',c:'030530',t:'반도체 지주사',nps:'',k:'in',m:'외인 <b>전환</b>(+153). 지주사 재평가 + 자회사 NAV전이 + 코스닥150, 4중 촉매'},
+    {n:'에이치브이엠',c:'295310',t:'반도체 소재(특수합금)',nps:'5.06%',k:'in',m:'<span class="warn">⚠ 외인 차익실현 시작(-140)</span>, 기관이 받는 중 — 단기 주의'},
+  ]},
+  { h:'🚀 차기테마 — 로봇·우주 (코스닥150 편입 · 6월 촉매)', d:'패시브 수급 + 정책테마', rows:[
+    {n:'쎄트렉아이',c:'099320',t:'우주항공',nps:'',k:'in',m:'수급 공백(-123). 누리호 5차 + SpaceX 상장(6/12) 촉매 베팅'},
+    {n:'비츠로셀',c:'082920',t:'방산/2차전지',nps:'',k:'in',m:'외인 매집 큰데 <b>미발진</b>(+512억) — 선취매 관점'},
+    {n:'로보스타',c:'090360',t:'로봇',nps:'',k:'in',m:'외인 둔화, 거래 한산'},
+    {n:'현대무벡스',c:'319400',t:'로봇/물류자동화',nps:'',k:'in',m:'외인 둔화(-74), 20일은 상승'},
+    {n:'기가비스',c:'420770',t:'반도체 검사',nps:'',k:'in',m:'기관 단독(+158), 외인 부재'},
+  ]},
+  { h:'🔬 반도체 베이스 — 국민연금 고비중', d:'스마트머니 액티브 보유', rows:[
+    {n:'원익머트리얼즈',c:'104830',t:'반도체 특수가스',nps:'9.77%',k:'',m:'외인 지속매집. 원익그룹 자회사'},
+    {n:'테스',c:'095610',t:'반도체 장비',nps:'9.44%',k:'',m:'<span class="warn">⚠ 기관 단독 후기</span>(기관+1318, 외인-498), 이미 20일 +44%'},
+    {n:'덕산네오룩스',c:'213420',t:'OLED 소재',nps:'7.95%',k:'',m:'외인 지속매집'},
+    {n:'비나텍',c:'126340',t:'슈퍼커패시터/연료전지',nps:'8.92%',k:'',m:'외인 <b>시총대비 5.5% 최강</b> (단 비핵심 테마)'},
+    {n:'하나머티리얼즈',c:'166090',t:'반도체 소재',nps:'5.00%',k:'',m:'외인+기관 <b>동반매수</b>(+361), 가장 깔끔'},
+    {n:'원익QnC',c:'074600',t:'반도체 석영부품',nps:'5.11%',k:'',m:'원익그룹 자회사 (쿼츠 글로벌 1위)'},
+  ]},
+  { h:'💊 바이오 — 국민연금 보유', d:'', rows:[
+    {n:'에스티팜',c:'237690',t:'원료의약(올리고)',nps:'6.07%',k:'',m:'외인 지속(+212)'},
+    {n:'올릭스',c:'226950',t:'RNAi 신약',nps:'5.04%',k:'',m:''},
+    {n:'알지노믹스',c:'476830',t:'RNA 치료제',nps:'5.04%',k:'',m:''},
+    {n:'쓰리빌리언',c:'394800',t:'AI 유전체 진단',nps:'5.06%',k:'',m:'수급 약, 전환 조짐'},
+    {n:'에이비엘바이오',c:'298380',t:'이중항체',nps:'4.02%',k:'',m:''},
+    {n:'오름테라퓨틱',c:'475830',t:'ADC 신약',nps:'',k:'in',m:'코스닥150 신규편입'},
+  ]},
+  { h:'⭐ 국민연금 절대비중 1·2위 — 추가여력 적음', d:'10%+ 보유 = 트림 위험', rows:[
+    {n:'코스메카코리아',c:'241710',t:'화장품 ODM',nps:'11.96%',k:'',m:'코스닥 국민연금 보유 <b>1위</b>. 10%+ 라 추가매수 여력 적음'},
+    {n:'대주전자재료',c:'078600',t:'2차전지 소재(실리콘음극재)',nps:'10.04%',k:'',m:'외인 <b>급가속</b>(+529) vs 기관 폭매도(-575) 충돌'},
+  ]},
+  { h:'⚠️ 회피 — 코스닥150 편출 + 국민연금 감소', d:'패시브 유출 + 스마트머니 이탈', rows:[
+    {n:'엠로',c:'058970',t:'공급망관리 SW',nps:'7.19%↓',k:'out',m:'더블 악재'},
+    {n:'미코',c:'059090',t:'반도체 부품',nps:'3.80%↓',k:'out',m:''},
+    {n:'메디톡스',c:'086900',t:'보툴리눔 톡신',nps:'3.97%↓',k:'out',m:''},
+    {n:'바이넥스',c:'053030',t:'바이오 CMO',nps:'3.76%↓',k:'out',m:''},
+  ]},
+  { h:'👀 순환매 관찰 — 엔터 (외인 전환 시 합류)', d:'현재 개인 주도, 외인·기관 미확인', rows:[
+    {n:'하이브',c:'352820',t:'엔터 (코스피)',nps:'',k:'',m:'외인 20일 -1708억 매도 → 최근5 +220억 <b>전환 초입</b>. BTS 투어 실적 진행 중'},
+    {n:'JYP Ent.',c:'035900',t:'엔터',nps:'',k:'',m:'외인·기관 소폭 유입'},
+    {n:'에스엠',c:'041510',t:'엔터',nps:'',k:'',m:''},
+  ]},
+];
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function kCell(k) {
+  if (k === 'in') return '<span class="k-in">✅ 편입</span>';
+  if (k === 'out') return '<span class="k-out">❌ 편출</span>';
+  return '<span class="k-na">—</span>';
+}
+function npsCell(v) {
+  if (!v) return '<span class="k-na">—</span>';
+  return `<span class="${v.includes('↓') ? '' : 'nps-pos'}">${esc(v)}</span>`;
+}
+document.getElementById('tiers').innerHTML = TIERS.map(T => `
+  <section class="tier">
+    <div class="tier-h">${esc(T.h)}</div>
+    ${T.d ? `<div class="tier-d">${esc(T.d)}</div>` : ''}
+    <div class="wrap"><table>
+      <thead><tr><th>종목</th><th>테마</th><th>국민연금</th><th>코스닥150</th><th>메모 (수급·촉매)</th></tr></thead>
+      <tbody>
+      ${T.rows.map(r => `
+        <tr>
+          <td class="c-name"><a href="/?code=${r.c}">${esc(r.n)}</a><span class="code">${r.c}</span></td>
+          <td class="c-theme">${esc(r.t)}</td>
+          <td class="c-nps">${npsCell(r.nps)}</td>
+          <td>${kCell(r.k)}</td>
+          <td class="c-memo">${r.m || ''}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>
+  </section>`).join('');
+</script>
+</body>
+</html>

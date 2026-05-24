@@ -4,6 +4,8 @@
 
 - [fix] freshness 검사 사각지대 보강 — 검사기가 `daily_prices`(PyKRX 경로, 항상 최신)만 봐서 KIS 경로인 `investor_flow`/`daily_valuations`/`daily_screening`이 따로 정체돼도(5/21 ConnectionError로 5/20 정지) "정상" 판정하던 silent failure 해소. `freshness_monitor`가 보조테이블 최신일도 거래일 오라클과 비교해 stale 탐지 + `backfill_flow.py` 자동복구. `_heal_flow`는 collector 윈도우·중복·`FRESHNESS_AUTOHEAL` 가드를 기존 `_heal`과 동일하게 적용 (ADR 018)
 - [feat] `scripts/backfill_flow.py` — 수급/밸류/스크리닝 백필을 collector_daemon 함수 재사용으로 래핑(`scan_investor_flow`→`compute_valuations --start`→누락일 `compute_screening`). 자동 누락일 탐지 + 전 테이블 최신이면 KIS 스캔 없이 skip(멱등). freshness 자동복구·수동 백필 공용
+- [feat] stock-chart 후보 정리 페이지(`/notes`) — 논의 종목 29개를 티어/테마별(핵심·로봇우주·반도체·바이오·연금최고비중·회피·엔터)로 정리, 각 종목 → `/?code=`로 차트 링크. 국민연금%·코스닥150 편입/편출·수급추세·촉매 메모 포함. `index.html`이 `?code=` 파라미터로 종목 선택 + 헤더 양방향 링크(차트↔후보). 사이드바 관심그룹에도 동일 7그룹 추가
+- [perf] stock-chart 차트 범위별 다운샘플 — 기본 로딩(전체)이 일봉 9천여봉(952KB)을 통째로 받아 느리던 것 해소. 범위에 따라 일봉(≤1Y)→주봉(3Y)→월봉(전체)으로 서버 집계(`_aggregate`/`RANGE_TF`), 전체 952KB→45KB(21배↓). 응답에 `tf` 필드 + 헤더에 현재 봉(일/주/월) 표시
 
 ## 2026-05-24
 

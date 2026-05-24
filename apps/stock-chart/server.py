@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import traceback
+from datetime import date
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -31,6 +32,38 @@ WATCHLIST_YAML = PROJECT_ROOT / "skills" / "report" / "watchlist.yaml"
 
 # range → 거래일 수 (대략: 1개월 ≈ 21 거래일)
 RANGE_LIMIT = {"3m": 66, "6m": 132, "1y": 264, "3y": 760, "all": 100000}
+# range → 봉 주기. 범위가 길수록 일봉→주봉→월봉으로 다운샘플 (봉수·payload 축소)
+RANGE_TF = {"3m": "D", "6m": "D", "1y": "D", "3y": "W", "all": "M"}
+
+
+def _agg_key(d, period):
+    if period == "W":
+        iso = date.fromisoformat(d).isocalendar()  # (ISO년, ISO주, 요일)
+        return f"{iso[0]}-W{iso[1]:02d}"
+    if period == "M":
+        return d[:7]  # YYYY-MM
+    return d
+
+
+def _aggregate(daily, period):
+    """일봉(오름차순) → 주봉/월봉 집계. 시가=기간 첫날, 고저=극값, 종가=마지막날,
+    거래량=합, time=기간 마지막 거래일. period='D'면 그대로 반환."""
+    if period == "D":
+        return daily
+    buckets, order = {}, []
+    for b in daily:
+        k = _agg_key(b["time"], period)
+        m = buckets.get(k)
+        if m is None:
+            buckets[k] = dict(b)  # 첫날 = 시가 기준
+            order.append(k)
+        else:
+            m["high"] = max(m["high"], b["high"])
+            m["low"] = min(m["low"], b["low"])
+            m["close"] = b["close"]        # 마지막 종가
+            m["volume"] += b["volume"]
+            m["time"] = b["time"]          # 기간 마지막 거래일
+    return [buckets[k] for k in order]
 
 
 def _stock_name(code):
@@ -54,7 +87,8 @@ def get_ohlcv(code, rng):
         lo = r["low"] if r["low"] and r["low"] > 0 else c
         ohlcv.append({"time": r["date"], "open": o, "high": h, "low": lo,
                       "close": c, "volume": r["volume"] or 0})
-    return {"code": code, "name": _stock_name(code), "ohlcv": ohlcv}
+    tf = RANGE_TF.get(rng, "D")
+    return {"code": code, "name": _stock_name(code), "ohlcv": _aggregate(ohlcv, tf), "tf": tf}
 
 
 def search(q):
@@ -185,6 +219,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"groups": groups_enriched()})
             if u.path in ("/", "/index.html"):
                 return self._file(WEB_DIR / "index.html", "text/html; charset=utf-8")
+            if u.path in ("/notes", "/notes.html"):
+                return self._file(WEB_DIR / "notes.html", "text/html; charset=utf-8")
             self.send_error(404)
         except Exception as e:
             traceback.print_exc()
