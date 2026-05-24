@@ -71,8 +71,9 @@ def _stock_name(code):
     return rows[0]["name"] if rows else code
 
 
-def get_ohlcv(code, rng):
-    """오름차순 OHLCV + 종목명. Lightweight Charts 포맷(time=YYYY-MM-DD)."""
+def get_ohlcv(code, rng, tf=None):
+    """오름차순 OHLCV + 종목명. Lightweight Charts 포맷(time=YYYY-MM-DD).
+    tf(D/W/M) 명시 시 그 봉으로, 아니면 범위별 기본(RANGE_TF)."""
     limit = RANGE_LIMIT.get(rng, RANGE_LIMIT["1y"])
     rows = db.get_daily_prices(code, limit=limit)  # DESC
     rows = list(reversed(rows))  # 차트는 오름차순 필요
@@ -87,7 +88,7 @@ def get_ohlcv(code, rng):
         lo = r["low"] if r["low"] and r["low"] > 0 else c
         ohlcv.append({"time": r["date"], "open": o, "high": h, "low": lo,
                       "close": c, "volume": r["volume"] or 0})
-    tf = RANGE_TF.get(rng, "D")
+    tf = tf if tf in ("D", "W", "M") else RANGE_TF.get(rng, "D")
     return {"code": code, "name": _stock_name(code), "ohlcv": _aggregate(ohlcv, tf), "tf": tf}
 
 
@@ -210,9 +211,10 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/ohlcv":
                 code = (q.get("code") or [""])[0].strip()
                 rng = (q.get("range") or ["1y"])[0]
+                tf = (q.get("tf") or [""])[0].strip() or None
                 if not code:
                     return self._json({"error": "code required"}, 400)
-                return self._json(get_ohlcv(code, rng))
+                return self._json(get_ohlcv(code, rng, tf))
             if u.path == "/api/search":
                 return self._json(search((q.get("q") or [""])[0].strip()))
             if u.path == "/api/groups":
