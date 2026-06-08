@@ -2,7 +2,7 @@
 
 ## 2026-06-09
 
-- [feat] 미국 10년물 국채금리 레퍼런스 페이지(`/rates`) — stock.goldenlabs.dev에 국채 전용 독립 페이지 추가(종목 검색 경로와 분리). 골드 area 라인차트 + 현재값/전일대비(bp)/52주 레인지 바 + 일/주/월·1Y/3Y/5Y/10Y/전체. `server.py`에 `/api/rates`·`/rates` 라우팅, `index`/`notes` 헤더에 국채 링크. `daily_indices` code='US10Y' 재사용(close=yield, REAL이라 소수 OK) — 전용 테이블 미생성
+- [feat] 미국 10년물 국채금리 레퍼런스 페이지(`/rates`) — stock.goldenlabs.dev에 국채 전용 독립 페이지 추가(종목 검색 경로와 분리). 골드 area 라인차트 + 현재값/전일대비(bp)/52주 레인지 바 + 일/주/월·1Y/3Y/5Y/10Y/전체. `server.py`에 `/api/rates`·`/rates` 라우팅, `index`/`notes` 헤더에 국채 링크. `daily_indices` code='US10Y' 재사용(close=yield, REAL이라 소수 OK) — 전용 테이블 미생성 (ADR 019)
 - [feat] 미국 국채금리 데이터 소스(`src/treasury_yield.py`) — 야후 `^TNX` chart API(urllib+json, API키·라이브러리 0). `fetch_history`(period1/period2 일봉 1970~ 14129행)·`fetch_quote`(현재값/전일대비/52주, 장중 실시간 ~15분 지연). FRED·stooq는 맥프로에서 timeout/봇차단으로 탈락. ⚠️ `range=max`는 월봉 다운샘플(159건) 함정 → period 방식 필수. 전일대비는 일봉 직전종가로 계산(meta.chartPreviousClose는 범위 시작 직전이라 부정확)
 - [feat] `scripts/backfill_us10y.py` — ^TNX 일봉 전체 → `daily_indices`(US10Y) 멱등 백필. 맥프로 로컬 14129행(1970-01-02~) 완료
 - [feat] Alfred 국채 모니터(`daemons/treasury_monitor.py`, MonitorBase) — 매일 KST 07:30 아침 루틴 보고 + 장중 기준가 대비 ±8bp 변동 알림. 폴링(15분)마다 daily_indices 갱신 → 페이지 최신화. 상태 `run/treasury_state.json`(아침보고 시 base_price=전일종가 리셋, 이후 8bp마다 재알림·스팸방지). `daemon_ctl` `treasury` 등록. 맥프로 코드+백필+검증(7/7 PASS) 완료, **맥미니 배포·실발신은 별도 승인 예정**
