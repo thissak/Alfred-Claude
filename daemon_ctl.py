@@ -69,6 +69,11 @@ DAEMONS = {
         "args": [],
         "desc": "매수 타이밍 알림",
     },
+    "treasury": {
+        "script": "daemons/treasury_monitor.py",
+        "args": [],
+        "desc": "미국 10년물 국채금리 아침 보고 + 장중 변동 알림",
+    },
     "health": {
         "script": "daemons/health_monitor.py",
         "args": [],

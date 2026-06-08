@@ -103,4 +103,7 @@
 - [x] collector 병렬화 + 재시도 — 일일 수집 6.6h→수십분, 누락 재발 방지 (ADR 016)
 - [x] 데이터 무결성 — 정직한 heartbeat(0건/저조 error) + freshness 독립 검사기(gap/stale 알림+자동복구), `com.alf.freshness` (ADR 017)
 - [x] freshness 보조테이블 확장 — investor_flow/screening 신선도도 검사+자동복구(`backfill_flow.py`), KIS 경로가 PyKRX와 별개로 정체되던 사각지대 해소 (ADR 018)
+- [x] 미국 10년물 국채금리 레퍼런스 페이지(`/rates`) — 야후 ^TNX, `daily_indices` US10Y 14129행(1970~), 골드 라인차트 + 현재값/전일대비bp/52주, 헤더 양방향 링크. 종목 검색과 분리된 독립 페이지
+- [x] Alfred 국채 모니터(`treasury_monitor.py`) — 매일 07:30 아침 보고 + 장중 ±8bp 변동 알림(MonitorBase, `daemon_ctl` 등록). 맥프로 코드+백필+검증(7/7) 완료
+- [ ] 국채 모니터 맥미니 배포 — rsync + `backfill_us10y` 실행 + `daemon treasury` launchd 등록 + 실발신 시작 (별도 승인)
 - [ ] 2단계 — 두 종목 겹쳐보기 (수익률 정규화)

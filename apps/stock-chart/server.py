@@ -35,6 +35,11 @@ RANGE_LIMIT = {"3m": 66, "6m": 132, "1y": 264, "3y": 760, "all": 100000}
 # range → 봉 주기. 범위가 길수록 일봉→주봉→월봉으로 다운샘플 (봉수·payload 축소)
 RANGE_TF = {"3m": "D", "6m": "D", "1y": "D", "3y": "W", "all": "M"}
 
+# /rates 전용 (미국 10년물 국채금리 라인) — 범위별 거래일 수 + 다운샘플 봉
+US10Y_CODE = "US10Y"
+RATE_LIMIT = {"1y": 264, "3y": 760, "5y": 1300, "10y": 2600, "all": 100000}
+RATE_TF = {"1y": "D", "3y": "W", "5y": "W", "10y": "M", "all": "M"}
+
 
 def _agg_key(d, period):
     if period == "W":
@@ -90,6 +95,45 @@ def get_ohlcv(code, rng, tf=None):
                       "close": c, "volume": r["volume"] or 0})
     tf = tf if tf in ("D", "W", "M") else RANGE_TF.get(rng, "D")
     return {"code": code, "name": _stock_name(code), "ohlcv": _aggregate(ohlcv, tf), "tf": tf}
+
+
+def _agg_line(series, period):
+    """라인 시리즈([{time,value}]) 주봉/월봉 다운샘플 — 버킷 마지막 값."""
+    if period == "D":
+        return series
+    buckets, order = {}, []
+    for p in series:
+        k = _agg_key(p["time"], period)
+        if k not in buckets:
+            order.append(k)
+        buckets[k] = {"time": p["time"], "value": p["value"]}
+    return [buckets[k] for k in order]
+
+
+def get_rates(rng, tf=None):
+    """미국 10년물 국채금리(daily_indices US10Y) → 라인 시리즈 + 현재/전일대비/52주.
+    실시간 최신값은 treasury_monitor가 daily_indices에 upsert하므로 DB만 읽는다."""
+    limit = RATE_LIMIT.get(rng, RATE_LIMIT["1y"])
+    rows = list(reversed(db.get_daily_indices(code=US10Y_CODE, limit=limit)))  # 오름차순
+    series = [{"time": r["date"], "value": r["close"]}
+              for r in rows if r["close"] is not None]
+    tf = tf if tf in ("D", "W", "M") else RATE_TF.get(rng, "D")
+    series = _agg_line(series, tf)
+    # 현재/전일대비 — 범위와 무관하게 최신 2거래일
+    last2 = db.get_daily_indices(code=US10Y_CODE, limit=2)  # DESC
+    current = last2[0]["close"] if last2 else None
+    prev = last2[1]["close"] if len(last2) > 1 else None
+    change_bp = round((current - prev) * 100, 1) if current is not None and prev is not None else None
+    # 52주 레인지 — 최근 252거래일
+    yr = [r["close"] for r in db.get_daily_indices(code=US10Y_CODE, limit=252)
+          if r["close"] is not None]
+    return {
+        "code": US10Y_CODE, "name": "미국 10년물 국채",
+        "current": current, "prev_close": prev, "change_bp": change_bp,
+        "w52_high": max(yr) if yr else None, "w52_low": min(yr) if yr else None,
+        "as_of": (last2[0]["date"] if last2 else None),
+        "series": series, "tf": tf,
+    }
 
 
 def search(q):
@@ -215,6 +259,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not code:
                     return self._json({"error": "code required"}, 400)
                 return self._json(get_ohlcv(code, rng, tf))
+            if u.path == "/api/rates":
+                rng = (q.get("range") or ["1y"])[0]
+                tf = (q.get("tf") or [""])[0].strip() or None
+                return self._json(get_rates(rng, tf))
             if u.path == "/api/search":
                 return self._json(search((q.get("q") or [""])[0].strip()))
             if u.path == "/api/groups":
@@ -223,6 +271,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(WEB_DIR / "index.html", "text/html; charset=utf-8")
             if u.path in ("/notes", "/notes.html"):
                 return self._file(WEB_DIR / "notes.html", "text/html; charset=utf-8")
+            if u.path in ("/rates", "/rates.html"):
+                return self._file(WEB_DIR / "rates.html", "text/html; charset=utf-8")
             self.send_error(404)
         except Exception as e:
             traceback.print_exc()
